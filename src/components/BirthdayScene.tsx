@@ -45,7 +45,20 @@ export default function BirthdayScene() {
       aria-hidden={!active}
       style={{ justifyContent: "flex-start", paddingTop: "max(3rem, env(safe-area-inset-top))" }}
     >
-      <div className="relative z-[9999] w-full max-w-xl mx-auto flex flex-col items-center text-center gap-3 px-3 pt-4 pointer-events-none select-none">
+      <div
+        className="relative w-full max-w-xl mx-auto flex flex-col items-center text-center gap-3 px-3 pt-4 pointer-events-none select-none"
+        style={{
+          zIndex: 1,
+          position: "relative",
+          background:
+            "linear-gradient(to bottom, rgba(10,6,18,0.0) 0%, rgba(10,6,18,0.0) 24%, rgba(10,6,18,0.9) 70%, rgba(10,6,18,0.98) 100%)",
+          WebkitMaskImage:
+            "linear-gradient(to bottom, #000 0%, #000 78%, rgba(0,0,0,0.2) 90%, transparent 100%)",
+          maskImage:
+            "linear-gradient(to bottom, #000 0%, #000 78%, rgba(0,0,0,0.2) 90%, transparent 100%)",
+          paddingBottom: "2.2rem",
+        }}
+      >
         <h1
           className={`text-3xl sm:text-4xl md:text-5xl text-white transition-all duration-[900ms] pointer-events-auto ${
             phase >= 1 ? "opacity-100 translate-y-0" : "opacity-0 translate-y-5"
@@ -71,7 +84,7 @@ export default function BirthdayScene() {
         </p>
       </div>
 
-      <div className="w-full flex-1 flex items-center justify-center" style={{ marginTop: "-3.5rem" }}>
+      <div className="w-full flex-1 flex items-center justify-center" style={{ marginTop: "-3.5rem", zIndex: 2, position: "relative" }}>
         <PolaroidStack onComplete={onPolaroidComplete} active={active} />
       </div>
 
