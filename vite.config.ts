@@ -8,6 +8,17 @@ export default defineConfig({
   plugins: [react()],
   server: {
     host: '0.0.0.0',
-    port: 5173,
+    port: 5199,
+    strictPort: true,
+    allowedHosts: true,
+    cors: true,
+    hmr: { host: 'localhost', port: 5199 },
   },
+  preview: {
+    host: '0.0.0.0',
+    port: 4199,
+    strictPort: true,
+    allowedHosts: true,
+    cors: true,
+  }
 })

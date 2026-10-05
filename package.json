@@ -13,8 +13,8 @@
     "preview": "vite preview",
     "git:sync": "git add -A && git commit -m \"auto sync\" --allow-empty && git push origin main",
     "sync": "npm run git:sync && npm run deploy",
-    "tunnel": "ngrok http 5173 --scheme https",
-    "dev:tunnel": "concurrently -k -n vite,ngrok -c blue,magenta \"npm run dev -- --host 0.0.0.0\" \"wait-on tcp:127.0.0.1:5173 && ngrok http 5173 --scheme https\"",
+    "tunnel": "ngrok http 5199 --url https://",
+    "dev:tunnel": "concurrently -k -n vite,ngrok -c blue,magenta \"npm run dev\" \"wait-on tcp:127.0.0.1:5199 && ngrok http 5199 --url https://\"",
     "share": "npm run dev:tunnel"
   },
   "dependencies": {
