@@ -71,7 +71,7 @@ export default function BirthdayScene() {
         </p>
       </div>
 
-      <div className="w-full flex-1 flex items-center justify-center" style={{ marginTop: "-2.5rem" }}>
+      <div className="w-full flex-1 flex items-center justify-center" style={{ marginTop: "-3.5rem" }}>
         <PolaroidStack onComplete={onPolaroidComplete} active={active} />
       </div>
 

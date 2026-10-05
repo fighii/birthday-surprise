@@ -24,15 +24,15 @@ type SlotPreset = {
 };
 
 const SLOT_PRESETS: SlotPreset[] = [
-  { x: -76, y: -116, rot: -8.0, label: "TopLeft" },
+  { x: -76, y: -130, rot: -8.0, label: "TopLeft" },
   { x:  76, y:  96,  rot:  6.5, label: "BotRight" },
-  { x:  80, y: -112, rot:  9.0, label: "TopRight" },
+  { x:  80, y: -126, rot:  9.0, label: "TopRight" },
   { x: -80, y:  94,  rot: -5.5, label: "BotLeft" },
   { x: -92, y:   4,  rot: -3.5, label: "MidLeft" },
   { x:  92, y:  -2,  rot:  5.0, label: "MidRight" },
-  { x:   0, y: -100, rot: -2.5, label: "MidTopSafe" },
+  { x:   0, y: -114, rot: -2.5, label: "MidTopSafe" },
   { x:   2, y: 102,  rot:  3.8, label: "BotCenter" },
-  { x:   0, y: -22,  rot:  1.2, label: "Center" },
+  { x:   0, y: -34,  rot:  1.2, label: "Center" },
 ];
 
 const JITTER_TABLE: Array<[number, number, number]> = [
@@ -78,7 +78,7 @@ function getSlotForIndex(c: number): { settleX: number; settleY: number; settleT
     scaleBoost = -0.01 * Math.min(pass, 6);
   }
   const settleX = Math.max(-120, Math.min(120, slot.x + jx));
-  const settleY = Math.max(-130, Math.min(140, slot.y + jy));
+  const settleY = Math.max(-146, Math.min(140, slot.y + jy));
   const settleT = slot.rot + jr;
   const settleS = Math.max(0.78, 0.9 + scaleBoost - pass * 0.006);
   return { settleX, settleY, settleT, settleS };

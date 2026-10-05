@@ -10,7 +10,9 @@
     "predeploy": "npm run build",
     "deploy": "gh-pages -d dist",
     "lint": "oxlint",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "git:sync": "git add -A && git commit -m \"auto sync\" --allow-empty && git push origin main",
+    "sync": "npm run git:sync && npm run deploy"
   },
   "dependencies": {
     "react": "^19.2.8",
