@@ -23,10 +23,33 @@ dist-ssr
 *.sln
 *.sw?
 
-# GitHub file size limit > 100MB (backup originals, use compressed versions)
-assets/videos/video01.MOV
+# ================================================
+# MEDIA FOLDERS: KEEP LOCAL ONLY (Never push to GitHub!)
+# Hanya simpan source code di repo. Website di-host via gh-pages
+# yang membawa media dari build lokal saja.
+# ================================================
+/assets/photos/*
+/assets/videos/*
+/assets/music/*
+/assets/originals/*
+/assets/**/*.MOV
+/assets/**/*.mp4
+/assets/**/*.MP4
+/assets/**/*.jpg
+/assets/**/*.JPG
+/assets/**/*.jpeg
+/assets/**/*.png
+/assets/**/*.PNG
+/assets/**/*.webp
+/assets/**/*.mp3
+/assets/**/*.MP3
+/assets/**/*.wav
+# Jangan ignore file .gitkeep (placeholder folder agar struktur repo tetap ada)
+!/assets/photos/.gitkeep
+!/assets/videos/.gitkeep
+!/assets/music/.gitkeep
+
 # Temporary local ffmpeg script
 compress-video.cjs
-# Dev-only media (optional, keep uncommitted large originals)
-assets/originals/
+
 

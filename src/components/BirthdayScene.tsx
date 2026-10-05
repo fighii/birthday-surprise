@@ -45,9 +45,9 @@ export default function BirthdayScene() {
       aria-hidden={!active}
       style={{ justifyContent: "flex-start", paddingTop: "max(3rem, env(safe-area-inset-top))" }}
     >
-      <div className="relative z-10 w-full max-w-xl mx-auto flex flex-col items-center text-center gap-3 px-3 pt-4">
+      <div className="relative z-[9999] w-full max-w-xl mx-auto flex flex-col items-center text-center gap-3 px-3 pt-4 pointer-events-none select-none">
         <h1
-          className={`text-3xl sm:text-4xl md:text-5xl text-white transition-all duration-[900ms] ${
+          className={`text-3xl sm:text-4xl md:text-5xl text-white transition-all duration-[900ms] pointer-events-auto ${
             phase >= 1 ? "opacity-100 translate-y-0" : "opacity-0 translate-y-5"
           }`}
         >
@@ -56,14 +56,14 @@ export default function BirthdayScene() {
           </span>
         </h1>
         <p
-          className={`text-cinematic-soft/80 text-base sm:text-lg transition-all duration-[900ms] ${
+          className={`text-cinematic-soft/80 text-base sm:text-lg transition-all duration-[900ms] pointer-events-auto ${
             phase >= 2 ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4"
           }`}
         >
           {birthdayConfig.birthdaySubtext}
         </p>
         <p
-          className={`text-romantic text-2xl sm:text-3xl text-cinematic-love transition-all duration-[900ms] ${
+          className={`text-romantic text-2xl sm:text-3xl text-cinematic-love transition-all duration-[900ms] pointer-events-auto ${
             phase >= 3 ? "opacity-100 translate-y-0" : "opacity-0 translate-y-5"
           }`}
         >
@@ -71,7 +71,7 @@ export default function BirthdayScene() {
         </p>
       </div>
 
-      <div className="w-full flex-1 flex items-center justify-center py-4">
+      <div className="w-full flex-1 flex items-center justify-center" style={{ marginTop: "-2.5rem" }}>
         <PolaroidStack onComplete={onPolaroidComplete} active={active} />
       </div>
 
