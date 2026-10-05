@@ -9,7 +9,7 @@ export const birthdayConfig = {
 
   birthdayMessage: "Happy Birthday Ayang \u2764\ufe0f",
   birthdaySubtext: "Today is all about you.",
-  introLine1: "Hey, Ayang ...",
+  introLine1: "Hey, Ayang ku ...",
   introLine2: "Bentar ...",
   introLine3: "Fighi punya sesuatu buat Ayang \u2764\ufe0f",
 
