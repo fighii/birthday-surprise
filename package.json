@@ -13,8 +13,8 @@
     "preview": "vite preview",
     "git:sync": "git add -A && git commit -m \"auto sync\" --allow-empty && git push origin main",
     "sync": "npm run git:sync && npm run deploy",
-    "tunnel": "ngrok http 5199 --url https://",
-    "dev:tunnel": "concurrently -k -n vite,ngrok -c blue,magenta \"npm run dev\" \"wait-on tcp:127.0.0.1:5199 && ngrok http 5199 --url https://\"",
+    "tunnel": "ngrok http 5199",
+    "dev:tunnel": "concurrently -k -n vite,ngrok -c blue,magenta \"npm run dev\" \"wait-on tcp:127.0.0.1:5199 && ngrok http 5199\"",
     "share": "npm run dev:tunnel"
   },
   "dependencies": {
@@ -31,7 +31,7 @@
     "concurrently": "^10.0.5",
     "fluent-ffmpeg": "^2.1.3",
     "gh-pages": "^6.3.0",
-    "ngrok": "^5.0.0-beta.2",
+    "ngrok": "^4.3.3",
     "oxlint": "^1.81.0",
     "postcss": "^8.5.28",
     "tailwindcss": "^3.4.19",
