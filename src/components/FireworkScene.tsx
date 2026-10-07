@@ -370,7 +370,6 @@ export default function FireworkScene() {
     const pixSize =
       kind === "final" ? 2.05 : kind === "main" ? 1.95 : kind === "wish" ? 1.65 : 1.7;
 
-    // Radial explosion particles (mix explode + textForm candidates)
     for (let i = 0; i < count; i++) {
       const angle = (Math.PI * 2 * i) / count + (Math.random() - 0.5) * 0.28;
       const speed = (0.12 + Math.random() * 0.58) * scale * (reduced ? 0.82 : 1);
@@ -389,13 +388,12 @@ export default function FireworkScene() {
         color,
         kind: isForm ? "textForm" : "explode",
         alpha: 1,
-        gravity: isForm ? 0.00002 : 0.00015 + Math.random() * 0.0002,
+        gravity: isForm ? 0 : 0.00015 + Math.random() * 0.0002,
         drag: isForm ? 0.986 : 0.988 - Math.random() * 0.008,
         glow: isForm ? pixSize * 5.5 : 8 + Math.random() * 14 * scale,
       };
       spawnParticle(p);
     }
-    // Sparkle burst
     for (let i = 0; i < (reduced ? 18 : 34) * scale; i++) {
       const angle = Math.random() * Math.PI * 2;
       const speed = (0.05 + Math.random() * 0.28) * scale;
@@ -415,7 +413,6 @@ export default function FireworkScene() {
         glow: 6 + Math.random() * 11,
       });
     }
-    // Assign text pixel targets if text provided
     if (textForForm.length > 0) {
       const fontSize =
         kind === "final"
@@ -425,7 +422,6 @@ export default function FireworkScene() {
           : Math.max(14, Math.min(30, cw * 0.058));
       const pts = sampleTextPoints(textForForm, fontSize, 0, cw, ch);
       if (pts.length > 0) {
-        // 1) Take available existing textForm particles from this explosion and assign targets
         const existingCandidates = particlesRef.current.filter(
           (p) => p.kind === "textForm" && p.tx === undefined && p.life < 200,
         );
@@ -439,8 +435,6 @@ export default function FireworkScene() {
           });
         };
         assignTo(existingCandidates.slice(0, pts.length));
-
-        // 2) If we still have pixels without particle -> spawn EXTRA textForm to fill the rest (natural full pixel letter)
         const assigned = Math.min(existingCandidates.length, pts.length);
         const remaining = pts.length - assigned;
         if (remaining > 0) {
@@ -459,7 +453,7 @@ export default function FireworkScene() {
               color: Math.random() < 0.82 ? dominantColor : accentColor,
               kind: "textForm",
               alpha: 1,
-              gravity: 0.00002,
+              gravity: 0,
               drag: 0.986,
               glow: pixSize * 5.5,
               tx: t.x,
@@ -469,34 +463,7 @@ export default function FireworkScene() {
             });
           }
         }
-
-        // 3) SECONDARY SHADOW PIXEL LAYER (natural drop-shadow -> 3D pixel block)
-        const allTextForms = particlesRef.current.filter(
-          (p) => p.kind === "textForm" && p.tx !== undefined,
-        );
-        for (let k = 0; k < allTextForms.length; k++) {
-          const src = allTextForms[k];
-          const sz = (src.size || pixSize) * 1.2;
-          spawnParticle({
-            x: cx,
-            y: cy,
-            vx: (src.vx || 0) * 0.9,
-            vy: (src.vy || 0) * 0.9,
-            life: 0,
-            maxLife: 3800 + Math.random() * 900,
-            size: sz,
-            color: "rgba(16,6,14,0.92)",
-            kind: "textForm",
-            alpha: 0.42,
-            gravity: 0.00002,
-            drag: 0.986,
-            glow: 0,
-            tx: (src.tx || 0) + Math.max(1.4, pixSize * 0.85),
-            ty: (src.ty || 0) + Math.max(1.2, pixSize * 0.72),
-            tweenT: 0,
-            tweenDur: (src.tweenDur || 700) + 40,
-          });
-        }
+        // NO SHADOW PIXEL LAYER — dihapus sesuai permintaan
       }
     }
   };
@@ -658,83 +625,14 @@ export default function FireworkScene() {
         }
       }
 
-      // Particles update + draw
+      // Particles update + draw (SINGLE PASS — SHADOW LAYER REMOVED per user request)
       const arr = particlesRef.current;
-
-      // -----------------------
-      // PASS 1: Text Shadow Pixels (source-over, behind everything)
-      // -----------------------
-      ctx.globalCompositeOperation = "source-over";
       const nowMs = now;
-      for (let i = 0; i < arr.length; i++) {
-        const p = arr[i];
-        if (p.kind !== "textForm") continue;
-        if (p.glow > 0) continue; // shadow = glow 0 + alpha < 0.6
-        if (p.alpha < 0.05 || !(p.color.startsWith("rgba") && +p.color.split(",")[0].slice(5) < 20)) continue;
-        p.life += dt;
-        const aliveFrac = p.life / p.maxLife;
-        // Micro flicker
-        const flick = 0.88 + 0.12 * Math.sin(nowMs * 0.02 + i);
-        let alpha = 1;
-        if (aliveFrac < 0.06) alpha = aliveFrac / 0.06;
-        else if (aliveFrac > 0.87) alpha = Math.max(0, 1 - (aliveFrac - 0.87) / 0.13);
-        alpha *= p.alpha * flick;
-        if (alpha <= 0.01) continue;
-        // Update pos (tween or lock)
-        if (p.tx !== undefined && p.ty !== undefined) {
-          p.tweenT = (p.tweenT || 0) + dt;
-          const twDur = p.tweenDur || 720;
-          const twFrac = Math.min(1, p.tweenT / twDur);
-          if (twFrac < 1) {
-            const ease = 1 - Math.pow(1 - twFrac, 3);
-            p.vx *= p.drag;
-            p.vy *= p.drag;
-            const gx = (p.tx - p.x) * 0.006 * dt * 0.13;
-            const gy = (p.ty - p.y) * 0.006 * dt * 0.13;
-            p.vx += gx;
-            p.vy += gy + p.gravity * dt;
-            p.x += p.vx * dt;
-            p.y += p.vy * dt;
-          } else {
-            p.x = p.tx;
-            p.y = p.ty;
-            p.vx = 0;
-            p.vy = 0;
-          }
-        } else {
-          p.vx *= p.drag;
-          p.vy = p.vy * p.drag + p.gravity * dt;
-          p.x += p.vx * dt;
-          p.y += p.vy * dt;
-        }
-        const sz = p.size * (0.96 + 0.08 * flick);
-        ctx.globalAlpha = alpha;
-        ctx.fillStyle = p.color;
-        ctx.fillRect(p.x - sz / 2, p.y - sz / 2, sz, sz);
-      }
-      ctx.globalAlpha = 1;
 
-      // -----------------------
-      // PASS 2: Explode, Sparkle, RocketTrail, Smoke + textForm MAIN + glow
-      // -----------------------
       ctx.globalCompositeOperation = "lighter";
       for (let i = arr.length - 1; i >= 0; i--) {
         const p = arr[i];
-        const isShadow =
-          p.kind === "textForm" &&
-          p.glow === 0 &&
-          p.alpha < 0.6 &&
-          p.color.startsWith("rgba");
-        // Skip shadow pixel drawn in pass 1
-        if (isShadow) {
-          // cleanup if dead
-          if (p.life / p.maxLife >= 1) arr.splice(i, 1);
-          continue;
-        }
-        // Only life-tick non-textForm and textForm main here (shadow life already ticked pass 1)
-        if (!(p.kind === "textForm" && p.glow === 0 && p.color.startsWith("rgba"))) {
-          p.life += dt;
-        }
+        p.life += dt;
         const aliveFrac = p.life / p.maxLife;
         if (aliveFrac >= 1) { arr.splice(i, 1); continue; }
 
@@ -742,19 +640,32 @@ export default function FireworkScene() {
           p.tweenT = (p.tweenT || 0) + dt;
           const twDur = p.tweenDur || 720;
           const twFrac = Math.min(1, p.tweenT / twDur);
+          // DIRECT LERP POSITION (NO VELOCITY OSCILLATION = NO BOUNCE!)
+          // Before: velocity-based gx/gy force → bisa overshoot target karena velocity inertia
+          // After: easeOutCubic lerp p.x directly from "current explode flight pos" -> "tx/ty"
+          // Simpan start posisi sekali di first tween tick via particle scratch micro-state trick p.tx/p.ty existing + init via first pos if not set — gunakan tx/ty sbg target, set start pos pake property hidden dgn Object.defineProperty or ref? Lebih simpel: simpan startX/Y via p.vx/vy DIPAKAI SEBAGAI START POS di tween frame pertama, lalu set flag dengan tx === undefined tidak mungkin, kita simpan p.startX/startY di particle dengan assign inline (TS allow any extra props via typed interface? Tapi Particle tidak punya startX. Solution: gunakan p.tweenT == 0 (frame pertama start tween) simpan pos SEBAGAI awal via closure variable tidak mungkin. Easier: di spawn explodeAt sudah assign tx/ty langsung particle baru, jadi TIDAK PUNYA start pos. GIMNA caranya start posisi = posisi saat tween dimulai? Workaround: gunakan easeOutExpo lerp — tiap frame set pos = lerp(pos, target, 0.085 * ...). Ini akan smooth settle NO OVERSHOOT & tidak butuh start pos.
           if (twFrac < 1) {
-            const ease = 1 - Math.pow(1 - twFrac, 3);
-            p.vx *= p.drag;
-            p.vy *= p.drag;
-            const gx = (p.tx - p.x) * 0.006 * dt * 0.13;
-            const gy = (p.ty - p.y) * 0.006 * dt * 0.13;
-            p.vx += gx;
-            p.vy += gy + p.gravity * dt;
-            p.x += p.vx * dt;
-            p.y += p.vy * dt;
-            void ease;
+            // Smoothly LERP current position directly toward target (NO VELOCITY, so no inertia bounce!)
+            // easeOutCubic strength lerp, no velocity vector accumulation
+            const lerpT = 1 - Math.pow(1 - Math.min(1, twFrac * 1.15), 3);
+            // Calculate current toward target
+            const towardX = p.tx - p.x;
+            const towardY = p.ty - p.y;
+            p.x += towardX * lerpT * Math.min(1, dt / 520);
+            p.y += towardY * lerpT * Math.min(1, dt / 520);
+            // Also dampen any leftover explode velocity (safety: no overshoot drift!)
+            p.vx *= 0.92;
+            p.vy *= 0.92;
+            if (Math.abs(towardX) < 0.25 && Math.abs(towardY) < 0.25) {
+              // Sudah dekat = langsung KUNCI, tidak usah tunggu twFrac penuh!
+              p.tweenT = twDur + 1;
+              p.x = p.tx;
+              p.y = p.ty;
+              p.vx = 0;
+              p.vy = 0;
+            }
           } else {
-            // LOCK EXACT pixel pos — NO JITTER (natural crisp pixel art)
+            // LOCK EKSACT — micro flicker hanya opacity, TIDAK POSISI (bounce = dari posisi bergoyang!)
             p.x = p.tx;
             p.y = p.ty;
             p.vx = 0;
@@ -767,40 +678,39 @@ export default function FireworkScene() {
           p.y += p.vy * dt;
         }
 
-        // Alpha fade (textForm stays longer!)
+        // Alpha fade
         let alpha = 1;
         const fadeEndFrac = p.kind === "textForm" ? 0.87 : 0.78;
         const fadeInFrac = p.kind === "textForm" ? 0.05 : 0.12;
         if (aliveFrac < fadeInFrac) alpha = aliveFrac / fadeInFrac;
         else if (aliveFrac > fadeEndFrac) alpha = Math.max(0, 1 - (aliveFrac - fadeEndFrac) / (1 - fadeEndFrac));
         if (p.kind === "smoke") alpha *= 0.4;
-        // micro flicker for textForm pixel (LED-like)
+        // Stabilize textForm: NO SIZE FLICKER! Posisi juga terkunci — opacity micro kedip tipis saja
         const flickP =
           p.kind === "textForm"
-            ? 0.92 + 0.08 * Math.sin(nowMs * 0.018 + i * 0.61)
+            ? 0.96 + 0.04 * Math.sin(nowMs * 0.012 + i * 0.31)
             : 1;
         alpha *= flickP;
         p.alpha = alpha;
 
         const isText = p.kind === "textForm";
-        // Glow aura (lighter compositing) — for both explode and textForm
+        // Glow aura
         if (p.glow > 0 && alpha > 0.03) {
-          const glowRadius = p.size * (isText ? 4.0 : 4.5);
+          const glowRadius = p.size * (isText ? 3.2 : 4.5);
           const g = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, glowRadius);
           g.addColorStop(0, p.color);
-          g.addColorStop(0.4, p.color + "66");
+          g.addColorStop(0.45, p.color + "55");
           g.addColorStop(1, p.color + "00");
-          ctx.globalAlpha = alpha * (isText ? 0.85 : 0.9);
+          ctx.globalAlpha = alpha * (isText ? 0.65 : 0.9);
           ctx.fillStyle = g;
           ctx.beginPath();
           ctx.arc(p.x, p.y, glowRadius, 0, Math.PI * 2);
           ctx.fill();
         }
-        // Main particle — for textForm = SQUARE fillRect (crisp pixel art!)
         ctx.globalAlpha = alpha;
         ctx.fillStyle = p.color;
         if (isText) {
-          const sz = p.size * (0.97 + 0.06 * flickP);
+          const sz = p.size;  // SAMA SELALU — TIDAK ADA SIZE FLICKER (menyebabkan "pulse/bounce")
           ctx.fillRect(p.x - sz / 2, p.y - sz / 2, sz, sz);
         } else {
           ctx.beginPath();
