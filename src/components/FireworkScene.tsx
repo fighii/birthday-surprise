@@ -567,69 +567,107 @@ export default function FireworkScene() {
     textForForm: string,
     kind: "main" | "wish" | "final",
   ) => {
-    const baseCount = reduced ? 92 : 162;
-    const count = Math.floor(baseCount * scale);
+    // ✨✨ STRATEGI BARU: LEDAKAN SELALU JELAS TERLIHAT, SEBAGIAN KECIL MEMBENTUK TEXT
+    // Step 1: SPAWN BURST LEDAKAN BESAR (100% explode particle, TIDAK ADA textForm)
+    //         → User SELALU melihat BOOM pixel terlebih dahulu.
+    // Step 2: Baru SEBAGIAN KECIL particle tambahan jadi textForm (ratio 32%, dulu 55%)
+    // Step 3: Explode life DIPERPANJANG agar terlihat bersamaan dengan text yang terbentuk.
+    // Hasil: "ada ledakan jelas → sebagian pixel mengalir jadi huruf → ledakan sisa masih terlihat"
+
     const dominantColor = palette[0];
     const accentColor = palette[1] ?? dominantColor;
-
-    // ✅✨ PIXEL NATURAL SQUARE — SEMUA UKURAN = INTEGER BULAT KELIPATAN, BUKAN FLOAT!
-    // Sehingga visual LED pixel board NATURAL, bukan kotak berantakan random.
     const pixSize =
       kind === "final" ? 4 : kind === "main" ? 4 : kind === "wish" ? 3 : 3;
-
-    // Predefined integer sizes (2,3,4,5,6) untuk explode — distribusi weighted:
-    // lebih banyak size 3+4 = natural fireworks LED, bukan blur random.
     const explodeSizesPool: number[] = [2,2,3,3,3,3,4,4,4,5,6];
+    const sparklePool: number[] = [2,2,2,3,3,4];
 
-    for (let i = 0; i < count; i++) {
-      const angle = (Math.PI * 2 * i) / count + (Math.random() - 0.5) * 0.32;
-      const speed = (0.13 + Math.random() * 0.62) * scale * (reduced ? 0.82 : 1);
-      const isForm = Math.random() < 0.55 && textForForm.length > 0;
-      const color = isForm ? (Math.random() < 0.78 ? dominantColor : accentColor) : sampleColor(palette);
-
-      // KUANTISASI KE INTEGER — pixel = kotak LED ukuran seragam!
-      const finalSize: number = isForm
-        ? pixSize + (Math.random() < 0.3 ? 1 : 0) // 3/4 integer, bukan 2.4-3.1
-        : explodeSizesPool[Math.floor(Math.random() * explodeSizesPool.length)];
-
+    // =========================================================
+    // 💥 BURST 1: LEDAKAN PERTAMA 100% EXPLODE (TIDAK ADA TEXT)
+    //            Pastikan ledakan TERLIHAT JELAS sebelum text terbentuk!
+    // =========================================================
+    const burst1Count = Math.floor((reduced ? 110 : 180) * scale); // lebih banyak dari sebelumnya!
+    for (let i = 0; i < burst1Count; i++) {
+      const angle = (Math.PI * 2 * i) / burst1Count + (Math.random() - 0.5) * 0.38;
+      const speed = (0.16 + Math.random() * 0.68) * scale * (reduced ? 0.84 : 1);
+      // 100% = explode JANGAN DIUBAH jadi text, tetap berhamburan seperti kembang api normal!
       const p: Particle = {
         x: cx,
         y: cy,
         vx: Math.cos(angle) * speed,
         vy: Math.sin(angle) * speed,
         life: 0,
-        maxLife: isForm ? 4600 + Math.random() * 1600 : 1600 + Math.random() * 1600,
-        size: finalSize,
-        color,
-        kind: isForm ? "textForm" : "explode",
+        // 💥 Life explode DIPERPANJANG +800ms: sambil text terbentuk ledakan masih kelihatan!
+        maxLife: 2400 + Math.random() * 1800,
+        size: explodeSizesPool[Math.floor(Math.random() * explodeSizesPool.length)],
+        color: sampleColor(palette),
+        kind: "explode",
         alpha: 1,
-        gravity: isForm ? 0 : 0.00015 + Math.random() * 0.00022,
-        drag: isForm ? 0.986 : 0.988 - Math.random() * 0.008,
-        glow: isForm ? pixSize * 6 : 10 + Math.random() * 16 * scale,
+        gravity: 0.00018 + Math.random() * 0.00024,
+        drag: 0.988 - Math.random() * 0.008,
+        glow: 14 + Math.random() * 20 * scale, // glow lebih besar = LEDAKAN LEBIH TERANG
       };
       spawnParticle(p);
     }
-    // ✨ Sparkle particle JUGA INTEGER: 2 / 2 / 3 pool, random pick, BUKAN 1.0-2.7 float!
-    const sparklePool: number[] = [2,2,2,3,3,4];
-    const sparkleN = Math.floor((reduced ? 22 : 40) * scale);
+
+    // =========================================================
+    // 💥 BURST 2: LEDAKAN SPARKLE EXTRA (tambahan terang)
+    // =========================================================
+    const sparkleN = Math.floor((reduced ? 28 : 52) * scale);
     for (let i = 0; i < sparkleN; i++) {
       const angle = Math.random() * Math.PI * 2;
-      const speed = (0.06 + Math.random() * 0.33) * scale;
+      const speed = (0.07 + Math.random() * 0.38) * scale;
       spawnParticle({
         x: cx,
         y: cy,
         vx: Math.cos(angle) * speed,
         vy: Math.sin(angle) * speed,
         life: 0,
-        maxLife: 650 + Math.random() * 1100,
+        maxLife: 900 + Math.random() * 1400,
         size: sparklePool[Math.floor(Math.random() * sparklePool.length)],
         color: sampleColor(palette),
         kind: "sparkle",
         alpha: 1,
         gravity: 0.00005,
         drag: 0.985,
-        glow: 7 + Math.random() * 12,
+        glow: 10 + Math.random() * 15,
       });
+    }
+
+    // =========================================================
+    // 📝 HANYA 32% SAJA particle tambahan yang akan membentuk text!
+    //    Sebagian besar = LEDAKAN biasa (burst1) supaya ledakan TETAP TERLIHAT JELAS.
+    // =========================================================
+    if (textForForm.length > 0) {
+      const candidateCount = Math.floor((reduced ? 70 : 128) * scale);
+      for (let i = 0; i < candidateCount; i++) {
+        const angle = (Math.PI * 2 * i) / candidateCount + (Math.random() - 0.5) * 0.28;
+        const speed = (0.10 + Math.random() * 0.52) * scale * (reduced ? 0.82 : 1);
+        const isForm = Math.random() < 0.32; // HANYA 32% menjadi text! sisanya 68% explode biasa
+        const color = isForm
+          ? (Math.random() < 0.8 ? dominantColor : accentColor)
+          : sampleColor(palette);
+        const finalSize: number = isForm
+          ? pixSize + (Math.random() < 0.28 ? 1 : 0)
+          : explodeSizesPool[Math.floor(Math.random() * explodeSizesPool.length)];
+        const p: Particle = {
+          x: cx,
+          y: cy,
+          vx: Math.cos(angle) * speed,
+          vy: Math.sin(angle) * speed,
+          life: 0,
+          maxLife: isForm
+            ? 4700 + Math.random() * 1600
+            : 2300 + Math.random() * 1700,
+          size: finalSize,
+          color,
+          kind: isForm ? "textForm" : "explode",
+          alpha: 1,
+          gravity: isForm ? 0 : 0.00014 + Math.random() * 0.00020,
+          drag: isForm ? 0.986 : 0.988 - Math.random() * 0.008,
+          glow: isForm ? pixSize * 6 : 12 + Math.random() * 18 * scale,
+        };
+        spawnParticle(p);
+      }
     }
     if (textForForm.length > 0) {
       // ✅ FONT SIZE 1.5x LEBIH BESAR (clamp + persen of screen width)
