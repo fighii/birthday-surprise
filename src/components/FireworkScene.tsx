@@ -205,12 +205,12 @@ export default function FireworkScene() {
     });
     const img = octx.getImageData(0, 0, off.width, off.height).data;
     const pts: { x: number; y: number }[] = [];
-    const step = Math.max(3, Math.floor(scale * 2));
+    const step = Math.max(9, Math.floor(scale * 4.5));
     for (let y = 0; y < off.height; y += step) {
       for (let x = 0; x < off.width; x += step) {
         const a = img[(y * off.width + x) * 4 + 3];
-        if (a > 128) {
-          pts.push({ x: x / scale, y: y / scale });
+        if (a > 160) {
+          pts.push({ x: Math.round(x / scale), y: Math.round(y / scale) });
         }
       }
     }
@@ -219,12 +219,8 @@ export default function FireworkScene() {
         pts.push({ x: cw / 2 + (Math.random() - 0.5) * 100, y: ch * 0.5 + (Math.random() - 0.5) * 40 });
       }
     }
-    // shuffle & take targetCount
-    for (let i = pts.length - 1; i > 0; i--) {
-      const j = (Math.random() * (i + 1)) | 0;
-      [pts[i], pts[j]] = [pts[j], pts[i]];
-    }
-    return pts.slice(0, targetCount);
+    // Pixel art = don't shuffle the shape sample order
+    return pts;
   };
 
   const startMainBirthday = (cw: number, ch: number) => {
@@ -367,70 +363,139 @@ export default function FireworkScene() {
     textForForm: string,
     kind: "main" | "wish" | "final",
   ) => {
-    const baseCount = reduced ? 70 : 120;
+    const baseCount = reduced ? 80 : 140;
     const count = Math.floor(baseCount * scale);
-    // Radial particles
+    const dominantColor = palette[0];
+    const accentColor = palette[1] ?? dominantColor;
+    const pixSize =
+      kind === "final" ? 2.05 : kind === "main" ? 1.95 : kind === "wish" ? 1.65 : 1.7;
+
+    // Radial explosion particles (mix explode + textForm candidates)
     for (let i = 0; i < count; i++) {
-      const angle = (Math.PI * 2 * i) / count + (Math.random() - 0.5) * 0.3;
-      const speed = (0.12 + Math.random() * 0.55) * scale * (reduced ? 0.8 : 1);
-      const isForm = Math.random() < 0.42 && textForForm.length > 0;
-      const color = sampleColor(palette);
+      const angle = (Math.PI * 2 * i) / count + (Math.random() - 0.5) * 0.28;
+      const speed = (0.12 + Math.random() * 0.58) * scale * (reduced ? 0.82 : 1);
+      const isForm = Math.random() < 0.55 && textForForm.length > 0;
+      const color = isForm ? (Math.random() < 0.78 ? dominantColor : accentColor) : sampleColor(palette);
       const p: Particle = {
         x: cx,
         y: cy,
         vx: Math.cos(angle) * speed,
         vy: Math.sin(angle) * speed,
         life: 0,
-        maxLife: 1400 + Math.random() * 1400,
-        size: (1.2 + Math.random() * 2.6) * scale,
+        maxLife: isForm ? 4200 + Math.random() * 1400 : 1400 + Math.random() * 1400,
+        size: isForm
+          ? pixSize * (0.92 + Math.random() * 0.18)
+          : (1.2 + Math.random() * 2.4) * scale,
         color,
         kind: isForm ? "textForm" : "explode",
         alpha: 1,
-        gravity: 0.00015 + Math.random() * 0.0002,
-        drag: 0.988 - Math.random() * 0.008,
-        glow: 8 + Math.random() * 14 * scale,
+        gravity: isForm ? 0.00002 : 0.00015 + Math.random() * 0.0002,
+        drag: isForm ? 0.986 : 0.988 - Math.random() * 0.008,
+        glow: isForm ? pixSize * 5.5 : 8 + Math.random() * 14 * scale,
       };
       spawnParticle(p);
     }
     // Sparkle burst
-    for (let i = 0; i < (reduced ? 16 : 30) * scale; i++) {
+    for (let i = 0; i < (reduced ? 18 : 34) * scale; i++) {
       const angle = Math.random() * Math.PI * 2;
-      const speed = (0.05 + Math.random() * 0.25) * scale;
+      const speed = (0.05 + Math.random() * 0.28) * scale;
       spawnParticle({
         x: cx,
         y: cy,
         vx: Math.cos(angle) * speed,
         vy: Math.sin(angle) * speed,
         life: 0,
-        maxLife: 600 + Math.random() * 900,
+        maxLife: 600 + Math.random() * 950,
         size: 0.6 + Math.random() * 1.3,
         color: sampleColor(palette),
         kind: "sparkle",
         alpha: 1,
         gravity: 0.00005,
         drag: 0.985,
-        glow: 6 + Math.random() * 10,
+        glow: 6 + Math.random() * 11,
       });
     }
-    // Now assign textForm targets if text provided
+    // Assign text pixel targets if text provided
     if (textForForm.length > 0) {
-      const formParticles = particlesRef.current.filter((p) => p.kind === "textForm" && p.tx === undefined);
-      if (formParticles.length > 0) {
-        const fontSize = kind === "final" ? Math.max(18, Math.min(40, cw * 0.075))
-          : kind === "main" ? Math.max(20, Math.min(42, cw * 0.078))
+      const fontSize =
+        kind === "final"
+          ? Math.max(18, Math.min(40, cw * 0.075))
+          : kind === "main"
+          ? Math.max(20, Math.min(42, cw * 0.078))
           : Math.max(14, Math.min(30, cw * 0.058));
-        const nTargets = formParticles.length;
-        const pts = sampleTextPoints(textForForm, fontSize, nTargets, cw, ch);
-        if (pts.length > 0) {
-          formParticles.forEach((p, i) => {
+      const pts = sampleTextPoints(textForForm, fontSize, 0, cw, ch);
+      if (pts.length > 0) {
+        // 1) Take available existing textForm particles from this explosion and assign targets
+        const existingCandidates = particlesRef.current.filter(
+          (p) => p.kind === "textForm" && p.tx === undefined && p.life < 200,
+        );
+        const assignTo = (list: Particle[]) => {
+          list.forEach((p, i) => {
             const t = pts[i % pts.length];
-            p.tx = t.x + (Math.random() - 0.5) * 2;
-            p.ty = t.y + (Math.random() - 0.5) * 2;
+            p.tx = t.x;
+            p.ty = t.y;
             p.tweenT = 0;
-            p.tweenDur = 650 + Math.random() * 350;
+            p.tweenDur = 620 + Math.random() * 380;
           });
-        } else {
-          formParticles.forEach((p) => { p.kind = "explode"; });
+        };
+        assignTo(existingCandidates.slice(0, pts.length));
+
+        // 2) If we still have pixels without particle -> spawn EXTRA textForm to fill the rest (natural full pixel letter)
+        const assigned = Math.min(existingCandidates.length, pts.length);
+        const remaining = pts.length - assigned;
+        if (remaining > 0) {
+          for (let k = assigned; k < pts.length; k++) {
+            const t = pts[k];
+            const angle = Math.random() * Math.PI * 2;
+            const speed = 0.1 + Math.random() * 0.45;
+            spawnParticle({
+              x: cx + (Math.random() - 0.5) * 8,
+              y: cy + (Math.random() - 0.5) * 8,
+              vx: Math.cos(angle) * speed,
+              vy: Math.sin(angle) * speed,
+              life: 0,
+              maxLife: 4300 + Math.random() * 1300,
+              size: pixSize * (0.9 + Math.random() * 0.2),
+              color: Math.random() < 0.82 ? dominantColor : accentColor,
+              kind: "textForm",
+              alpha: 1,
+              gravity: 0.00002,
+              drag: 0.986,
+              glow: pixSize * 5.5,
+              tx: t.x,
+              ty: t.y,
+              tweenT: 0,
+              tweenDur: 640 + Math.random() * 400,
+            });
+          }
+        }
+
+        // 3) SECONDARY SHADOW PIXEL LAYER (natural drop-shadow -> 3D pixel block)
+        const allTextForms = particlesRef.current.filter(
+          (p) => p.kind === "textForm" && p.tx !== undefined,
+        );
+        for (let k = 0; k < allTextForms.length; k++) {
+          const src = allTextForms[k];
+          const sz = (src.size || pixSize) * 1.2;
+          spawnParticle({
+            x: cx,
+            y: cy,
+            vx: (src.vx || 0) * 0.9,
+            vy: (src.vy || 0) * 0.9,
+            life: 0,
+            maxLife: 3800 + Math.random() * 900,
+            size: sz,
+            color: "rgba(16,6,14,0.92)",
+            kind: "textForm",
+            alpha: 0.42,
+            gravity: 0.00002,
+            drag: 0.986,
+            glow: 0,
+            tx: (src.tx || 0) + Math.max(1.4, pixSize * 0.85),
+            ty: (src.ty || 0) + Math.max(1.2, pixSize * 0.72),
+            tweenT: 0,
+            tweenDur: (src.tweenDur || 700) + 40,
+          });
         }
       }
     }
@@ -595,38 +660,105 @@ export default function FireworkScene() {
 
       // Particles update + draw
       const arr = particlesRef.current;
+
+      // -----------------------
+      // PASS 1: Text Shadow Pixels (source-over, behind everything)
+      // -----------------------
+      ctx.globalCompositeOperation = "source-over";
+      const nowMs = now;
+      for (let i = 0; i < arr.length; i++) {
+        const p = arr[i];
+        if (p.kind !== "textForm") continue;
+        if (p.glow > 0) continue; // shadow = glow 0 + alpha < 0.6
+        if (p.alpha < 0.05 || !(p.color.startsWith("rgba") && +p.color.split(",")[0].slice(5) < 20)) continue;
+        p.life += dt;
+        const aliveFrac = p.life / p.maxLife;
+        // Micro flicker
+        const flick = 0.88 + 0.12 * Math.sin(nowMs * 0.02 + i);
+        let alpha = 1;
+        if (aliveFrac < 0.06) alpha = aliveFrac / 0.06;
+        else if (aliveFrac > 0.87) alpha = Math.max(0, 1 - (aliveFrac - 0.87) / 0.13);
+        alpha *= p.alpha * flick;
+        if (alpha <= 0.01) continue;
+        // Update pos (tween or lock)
+        if (p.tx !== undefined && p.ty !== undefined) {
+          p.tweenT = (p.tweenT || 0) + dt;
+          const twDur = p.tweenDur || 720;
+          const twFrac = Math.min(1, p.tweenT / twDur);
+          if (twFrac < 1) {
+            const ease = 1 - Math.pow(1 - twFrac, 3);
+            p.vx *= p.drag;
+            p.vy *= p.drag;
+            const gx = (p.tx - p.x) * 0.006 * dt * 0.13;
+            const gy = (p.ty - p.y) * 0.006 * dt * 0.13;
+            p.vx += gx;
+            p.vy += gy + p.gravity * dt;
+            p.x += p.vx * dt;
+            p.y += p.vy * dt;
+          } else {
+            p.x = p.tx;
+            p.y = p.ty;
+            p.vx = 0;
+            p.vy = 0;
+          }
+        } else {
+          p.vx *= p.drag;
+          p.vy = p.vy * p.drag + p.gravity * dt;
+          p.x += p.vx * dt;
+          p.y += p.vy * dt;
+        }
+        const sz = p.size * (0.96 + 0.08 * flick);
+        ctx.globalAlpha = alpha;
+        ctx.fillStyle = p.color;
+        ctx.fillRect(p.x - sz / 2, p.y - sz / 2, sz, sz);
+      }
+      ctx.globalAlpha = 1;
+
+      // -----------------------
+      // PASS 2: Explode, Sparkle, RocketTrail, Smoke + textForm MAIN + glow
+      // -----------------------
       ctx.globalCompositeOperation = "lighter";
       for (let i = arr.length - 1; i >= 0; i--) {
         const p = arr[i];
-        p.life += dt;
+        const isShadow =
+          p.kind === "textForm" &&
+          p.glow === 0 &&
+          p.alpha < 0.6 &&
+          p.color.startsWith("rgba");
+        // Skip shadow pixel drawn in pass 1
+        if (isShadow) {
+          // cleanup if dead
+          if (p.life / p.maxLife >= 1) arr.splice(i, 1);
+          continue;
+        }
+        // Only life-tick non-textForm and textForm main here (shadow life already ticked pass 1)
+        if (!(p.kind === "textForm" && p.glow === 0 && p.color.startsWith("rgba"))) {
+          p.life += dt;
+        }
         const aliveFrac = p.life / p.maxLife;
         if (aliveFrac >= 1) { arr.splice(i, 1); continue; }
 
         if (p.kind === "textForm" && p.tx !== undefined && p.ty !== undefined) {
           p.tweenT = (p.tweenT || 0) + dt;
-          const twDur = p.tweenDur || 700;
+          const twDur = p.tweenDur || 720;
           const twFrac = Math.min(1, p.tweenT / twDur);
-          const ease = 1 - Math.pow(1 - twFrac, 3);
-          // Interpolate toward target from current position
-          const startX = p.x - p.vx * dt;
-          const startY = p.y - p.vy * dt;
           if (twFrac < 1) {
-            // drift + converge
+            const ease = 1 - Math.pow(1 - twFrac, 3);
             p.vx *= p.drag;
             p.vy *= p.drag;
-            const gx = (p.tx - p.x) * 0.006 * dt * 0.12;
-            const gy = (p.ty - p.y) * 0.006 * dt * 0.12;
+            const gx = (p.tx - p.x) * 0.006 * dt * 0.13;
+            const gy = (p.ty - p.y) * 0.006 * dt * 0.13;
             p.vx += gx;
             p.vy += gy + p.gravity * dt;
             p.x += p.vx * dt;
             p.y += p.vy * dt;
-            void startX; void startY;
+            void ease;
           } else {
-            // Lock to target with tiny jitter
-            p.x = p.tx + (Math.random() - 0.5) * 1.2;
-            p.y = p.ty + (Math.random() - 0.5) * 1.2;
-            // Slow decay
-            p.vx = 0; p.vy = 0;
+            // LOCK EXACT pixel pos — NO JITTER (natural crisp pixel art)
+            p.x = p.tx;
+            p.y = p.ty;
+            p.vx = 0;
+            p.vy = 0;
           }
         } else {
           p.vx *= p.drag;
@@ -635,37 +767,53 @@ export default function FireworkScene() {
           p.y += p.vy * dt;
         }
 
-        // Alpha fade
+        // Alpha fade (textForm stays longer!)
         let alpha = 1;
-        if (aliveFrac < 0.12) alpha = aliveFrac / 0.12;
-        else if (aliveFrac > 0.78) alpha = Math.max(0, 1 - (aliveFrac - 0.78) / 0.22);
+        const fadeEndFrac = p.kind === "textForm" ? 0.87 : 0.78;
+        const fadeInFrac = p.kind === "textForm" ? 0.05 : 0.12;
+        if (aliveFrac < fadeInFrac) alpha = aliveFrac / fadeInFrac;
+        else if (aliveFrac > fadeEndFrac) alpha = Math.max(0, 1 - (aliveFrac - fadeEndFrac) / (1 - fadeEndFrac));
         if (p.kind === "smoke") alpha *= 0.4;
+        // micro flicker for textForm pixel (LED-like)
+        const flickP =
+          p.kind === "textForm"
+            ? 0.92 + 0.08 * Math.sin(nowMs * 0.018 + i * 0.61)
+            : 1;
+        alpha *= flickP;
         p.alpha = alpha;
 
-        // Draw with glow
-        if (p.glow > 0) {
-          const g = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, p.size * 4.5);
+        const isText = p.kind === "textForm";
+        // Glow aura (lighter compositing) — for both explode and textForm
+        if (p.glow > 0 && alpha > 0.03) {
+          const glowRadius = p.size * (isText ? 4.0 : 4.5);
+          const g = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, glowRadius);
           g.addColorStop(0, p.color);
           g.addColorStop(0.4, p.color + "66");
           g.addColorStop(1, p.color + "00");
-          ctx.globalAlpha = alpha * 0.9;
+          ctx.globalAlpha = alpha * (isText ? 0.85 : 0.9);
           ctx.fillStyle = g;
           ctx.beginPath();
-          ctx.arc(p.x, p.y, p.size * 4.5, 0, Math.PI * 2);
+          ctx.arc(p.x, p.y, glowRadius, 0, Math.PI * 2);
           ctx.fill();
         }
+        // Main particle — for textForm = SQUARE fillRect (crisp pixel art!)
         ctx.globalAlpha = alpha;
         ctx.fillStyle = p.color;
-        ctx.beginPath();
-        ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
-        ctx.fill();
+        if (isText) {
+          const sz = p.size * (0.97 + 0.06 * flickP);
+          ctx.fillRect(p.x - sz / 2, p.y - sz / 2, sz, sz);
+        } else {
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+          ctx.fill();
+        }
       }
       ctx.globalAlpha = 1;
       ctx.globalCompositeOperation = "source-over";
 
-      // Update text opacity/scale for DOM overlay
+      // Update text opacity/scale for DOM overlay (SUPER FAINT HINT ONLY — 0.12 MAX opacity, 99% canvas pixels dominate!)
       if (activeTextRef.current.length > 0) {
-        const targetOpacity = 1;
+        const targetOpacity = 0.12;
         const targetScale = 1;
         textOpacityRef.current += (targetOpacity - textOpacityRef.current) * Math.min(1, dt / 450);
         textScaleRef.current += (targetScale - textScaleRef.current) * Math.min(1, dt / 500);
@@ -764,24 +912,24 @@ export default function FireworkScene() {
             }`}
             style={{
               color: textKindRef.current === "final" ? "#FFD7E3" : "#FFF6D8",
-              textShadow:
-                "0 0 22px rgba(255,220,140,0.85), 0 0 44px rgba(255,138,168,0.45), 0 0 80px rgba(201,168,255,0.25), 0 2px 6px rgba(0,0,0,0.6)",
-              WebkitTextStroke: textKindRef.current === "main" ? "0.25px rgba(255,220,140,0.35)" : undefined,
+              // No strong text-shadow — it's just a readability hint, invisible to casual eye
+              textShadow: "0 1px 2px rgba(0,0,0,0.4)",
+              WebkitTextStroke: undefined,
               ...titleStyle,
             }}
           >
             {activeTextRef.current}
           </h2>
-          {/* Sparkle decorations around text */}
+          {/* Sparkle decorations around text — also faint so it doesn't fight the pixel art */}
           {activeTextRef.current.length > 0 && (
             <div
               className="mt-4 flex items-center justify-center gap-3 text-cinematic-gold"
-              style={{ opacity: Math.min(1, textOpacityRef.current * 1.1) }}
+              style={{ opacity: Math.min(0.18, textOpacityRef.current * 1.6) }}
               aria-hidden
             >
-              <span style={{ fontSize: "1.2em", filter: "drop-shadow(0 0 6px rgba(255,220,140,0.9))" }}>✦</span>
-              <span style={{ fontSize: "0.8em", filter: "drop-shadow(0 0 4px rgba(255,220,140,0.8))" }}>✧</span>
-              <span style={{ fontSize: "1.2em", filter: "drop-shadow(0 0 6px rgba(255,220,140,0.9))" }}>✦</span>
+              <span style={{ fontSize: "1.2em", opacity: 0.8 }}>✦</span>
+              <span style={{ fontSize: "0.8em", opacity: 0.7 }}>✧</span>
+              <span style={{ fontSize: "1.2em", opacity: 0.8 }}>✦</span>
             </div>
           )}
         </div>
