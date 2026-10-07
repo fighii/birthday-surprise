@@ -36,6 +36,8 @@ interface Particle {
   glow: number;
   tx?: number;
   ty?: number;
+  startX?: number;
+  startY?: number;
   tweenT?: number;
   tweenDur?: number;
 }
@@ -65,15 +67,15 @@ interface FloatingStar {
   phase: number;
 }
 
-const PALETTE_MAIN = ["#FFE9A8", "#FFD07F", "#FFB347", "#FF8AA8", "#FFC9DE", "#C9A8FF"];
+const PALETTE_MAIN = ["#FFB347", "#FFD07F", "#FFE9A8", "#FF8AA8", "#C9A8FF", "#FFFFFF"];
 const PALETTE_WISH = [
-  ["#FFD07F", "#FFE9A8", "#FFB347"],
-  ["#FF8AA8", "#FFC9DE", "#FFFFFF"],
-  ["#C9A8FF", "#E8D9FF", "#FFFFFF"],
-  ["#8AD9FF", "#C9ECFF", "#FFFFFF"],
-  ["#9CFFB0", "#D5FFDC", "#FFFFFF"],
-  ["#FFE08A", "#FFF0C4", "#FFCF72"],
-  ["#FF9CC6", "#FFCFE0", "#FFFFFF"],
+  ["#FFB347", "#FFD07F", "#FFE9A8", "#FFFFFF"], // 1. Warm Gold Sunset
+  ["#FF6B9D", "#FF8AA8", "#FFC9DE", "#FFFFFF"], // 2. Raspberry Pink
+  ["#A084FF", "#C9A8FF", "#E8D9FF", "#FFFFFF"], // 3. Lavender Purple
+  ["#67C6FF", "#8AD9FF", "#C9ECFF", "#FFFFFF"], // 4. Sky Blue Ice
+  ["#6DE39A", "#9CFFB0", "#D5FFDC", "#FFFFFF"], // 5. Mint Emerald
+  ["#FFD86B", "#FFE08A", "#FFF0C4", "#FFFFFF"], // 6. Bright Sun Gold
+  ["#FF7EB9", "#FF9CC6", "#FFCFE0", "#FFFFFF"], // 7. Magenta Blush
 ];
 
 function sampleColor(arr: string[]) {
@@ -168,13 +170,15 @@ export default function FireworkScene() {
     forceRerender();
   };
 
-  // Text sampling: rasterize text on offscreen canvas and return array of target coords
+  // Text sampling: rasterize text -> target coords. CENTER = (centerX, centerY) = POSISI LEDAKAN cx/cy!
   const sampleTextPoints = (
     text: string,
     fontSize: number,
     targetCount: number,
     cw: number,
     ch: number,
+    centerX: number,
+    centerY: number,
   ): { x: number; y: number }[] => {
     const off = document.createElement("canvas");
     const scale = 2;
@@ -186,40 +190,42 @@ export default function FireworkScene() {
     octx.fillStyle = "#fff";
     octx.textAlign = "center";
     octx.textBaseline = "middle";
-    const fs = Math.min(fontSize, cw * 0.095);
-    // Break into 2 lines if too long
+    const fs = Math.min(fontSize, cw * 0.14);
+    // Break into 2 lines if too long (wish texts usually longer)
     const words = text.split(" ");
     let lines: string[] = [];
-    if (words.length > 4 && text.length > 26) {
+    if (words.length > 3 && text.length > 22) {
       const mid = Math.ceil(words.length / 2);
       lines.push(words.slice(0, mid).join(" "), words.slice(mid).join(" "));
     } else {
       lines.push(text);
     }
-    const lh = fs * 1.15;
-    const startY = ch * 0.5 - ((lines.length - 1) * lh) / 2;
+    const lh = fs * 1.18;
+    // PUSAT SELURUH BLOCK TEXT = centerX, centerY (cx/cy LEDAKAN! bukan tengah canvas)
+    const startY = centerY - ((lines.length - 1) * lh) / 2;
     lines.forEach((line, i) => {
-      const localFs = line.length > 22 ? fs * 0.82 : line.length > 18 ? fs * 0.9 : fs;
-      octx.font = `700 ${localFs}px Inter, system-ui, sans-serif`;
-      octx.fillText(line, cw / 2, startY + i * lh);
+      const localFs =
+        line.length > 28 ? fs * 0.76 : line.length > 22 ? fs * 0.84 : line.length > 16 ? fs * 0.92 : fs;
+      // Pixel font feel: font-weight BLACK + Inter = solid crisp pixel shape
+      octx.font = `900 ${localFs}px Inter, system-ui, -apple-system, sans-serif`;
+      octx.fillText(line, centerX, startY + i * lh);
     });
     const img = octx.getImageData(0, 0, off.width, off.height).data;
     const pts: { x: number; y: number }[] = [];
-    const step = Math.max(9, Math.floor(scale * 4.5));
+    const step = Math.max(9, Math.floor(scale * 4.5)); // step 9px = renggang PIXEL ART NATURAL
     for (let y = 0; y < off.height; y += step) {
       for (let x = 0; x < off.width; x += step) {
         const a = img[(y * off.width + x) * 4 + 3];
-        if (a > 160) {
+        if (a > 180) {
           pts.push({ x: Math.round(x / scale), y: Math.round(y / scale) });
         }
       }
     }
     if (pts.length === 0) {
       for (let i = 0; i < targetCount; i++) {
-        pts.push({ x: cw / 2 + (Math.random() - 0.5) * 100, y: ch * 0.5 + (Math.random() - 0.5) * 40 });
+        pts.push({ x: centerX + (Math.random() - 0.5) * 120, y: centerY + (Math.random() - 0.5) * 50 });
       }
     }
-    // Pixel art = don't shuffle the shape sample order
     return pts;
   };
 
@@ -230,19 +236,18 @@ export default function FireworkScene() {
       x: cw * 0.5 + (Math.random() - 0.5) * 20,
       y: ch + 20,
       startY: ch + 20,
-      targetY: ch * 0.28 + Math.random() * ch * 0.08,
+      targetY: ch * 0.30 + Math.random() * ch * 0.08,
       vy: 0,
       startAt: performance.now(),
       duration: mainBirthday.launchDuration,
       color: PALETTE_MAIN[0],
       trailTimer: 0,
       exploded: false,
-      size: 3.4,
+      size: 4.3,
       t: 0,
     };
     rocketsRef.current.push(rocket);
     addTimer(() => {
-      // Explode
       explodeAt(rocket.x, rocket.targetY, PALETTE_MAIN, 1.0, cw, ch, mainBirthday.text, "main");
       stateRef.current = FWState.MAIN_EXPLODE;
       addTimer(() => {
@@ -250,7 +255,6 @@ export default function FireworkScene() {
         activeTextRef.current = mainBirthday.text;
         textKindRef.current = "main";
         addTimer(() => {
-          // next phase: wishes or skip to final
           if (wishes.length > 0) {
             startWish(cw, ch);
           } else {
@@ -269,8 +273,8 @@ export default function FireworkScene() {
     }
     stateRef.current = FWState.WISH_LAUNCH;
     const palette = PALETTE_WISH[idx % PALETTE_WISH.length];
-    const x = cw * (0.18 + Math.random() * 0.64);
-    const targetY = ch * (0.22 + Math.random() * 0.18);
+    const x = cw * (0.16 + Math.random() * 0.68);
+    const targetY = ch * (0.20 + Math.random() * 0.22);
     const duration = 1500 + Math.random() * 400;
     const rocket: Rocket = {
       x,
@@ -283,19 +287,18 @@ export default function FireworkScene() {
       color: palette[0],
       trailTimer: 0,
       exploded: false,
-      size: 2.9,
+      size: 3.7,
       t: 0,
     };
     rocketsRef.current.push(rocket);
     addTimer(() => {
-      explodeAt(x, targetY, palette, 0.85, cw, ch, wishes[idx], "wish");
+      explodeAt(x, targetY, palette, 0.9, cw, ch, wishes[idx], "wish");
       stateRef.current = FWState.WISH_EXPLODE;
       addTimer(() => {
         stateRef.current = FWState.WISH_TEXT;
         activeTextRef.current = wishes[idx];
         textKindRef.current = "wish";
         addTimer(() => {
-          // Next wish
           textOpacityRef.current = 0;
           textScaleRef.current = 0.85;
           activeTextRef.current = "";
@@ -307,41 +310,40 @@ export default function FireworkScene() {
               startWish(cw, ch);
             }
           }, fwCfg.wishInterval || 2200);
-        }, 2000);
-      }, 400);
+        }, 2100);
+      }, 420);
     }, duration + 20);
   };
 
   const startFinal = (cw: number, ch: number) => {
     stateRef.current = FWState.FINAL_LAUNCH;
     const { ending } = fwCfg;
-    const palette = ["#FFD07F", "#FF8AA8", "#FFE9A8", "#C9A8FF", "#FFFFFF"];
+    const palette = ["#FFD86B", "#FF8AA8", "#FFE9A8", "#A084FF", "#FFFFFF"];
     const duration = 1900;
     const rocket: Rocket = {
       x: cw * 0.5 + (Math.random() - 0.5) * 12,
       y: ch + 20,
       startY: ch + 20,
-      targetY: ch * 0.26,
+      targetY: ch * 0.28,
       vy: 0,
       startAt: performance.now(),
       duration,
       color: "#FFFFFF",
       trailTimer: 0,
       exploded: false,
-      size: 4.2,
+      size: 5.3,
       t: 0,
     };
     rocketsRef.current.push(rocket);
     addTimer(() => {
-      explodeAt(rocket.x, rocket.targetY, palette, 1.3, cw, ch, ending.text, "final");
+      explodeAt(rocket.x, rocket.targetY, palette, 1.4, cw, ch, ending.text, "final");
       stateRef.current = FWState.FINAL_EXPLODE;
-      // Add 2 smaller secondary fireworks for grand finale
       addTimer(() => {
-        explodeAt(cw * 0.28, ch * 0.36, ["#FF8AA8", "#FFC9DE"], 0.65, cw, ch, "", "final");
-      }, 200);
+        explodeAt(cw * 0.26, ch * 0.38, PALETTE_WISH[1].slice(0, 3), 0.72, cw, ch, "", "final");
+      }, 220);
       addTimer(() => {
-        explodeAt(cw * 0.72, ch * 0.33, ["#C9A8FF", "#E8D9FF"], 0.65, cw, ch, "", "final");
-      }, 380);
+        explodeAt(cw * 0.74, ch * 0.35, PALETTE_WISH[2].slice(0, 3), 0.72, cw, ch, "", "final");
+      }, 400);
       addTimer(() => {
         stateRef.current = FWState.FINAL_TEXT;
         activeTextRef.current = ending.text;
@@ -349,7 +351,7 @@ export default function FireworkScene() {
         addTimer(() => {
           beginTransitionOut(cw, ch);
         }, ending.duration || 3000);
-      }, 600);
+      }, 620);
     }, duration + 20);
   };
 
@@ -363,16 +365,17 @@ export default function FireworkScene() {
     textForForm: string,
     kind: "main" | "wish" | "final",
   ) => {
-    const baseCount = reduced ? 80 : 140;
+    const baseCount = reduced ? 92 : 162;
     const count = Math.floor(baseCount * scale);
     const dominantColor = palette[0];
     const accentColor = palette[1] ?? dominantColor;
+    // ✅ UKURAN PIXEL LEBIH BESAR 1.4-1.5x (proporsional, matching font size baru)
     const pixSize =
-      kind === "final" ? 2.05 : kind === "main" ? 1.95 : kind === "wish" ? 1.65 : 1.7;
+      kind === "final" ? 3.05 : kind === "main" ? 2.85 : kind === "wish" ? 2.4 : 2.5;
 
     for (let i = 0; i < count; i++) {
-      const angle = (Math.PI * 2 * i) / count + (Math.random() - 0.5) * 0.28;
-      const speed = (0.12 + Math.random() * 0.58) * scale * (reduced ? 0.82 : 1);
+      const angle = (Math.PI * 2 * i) / count + (Math.random() - 0.5) * 0.32;
+      const speed = (0.13 + Math.random() * 0.62) * scale * (reduced ? 0.82 : 1);
       const isForm = Math.random() < 0.55 && textForForm.length > 0;
       const color = isForm ? (Math.random() < 0.78 ? dominantColor : accentColor) : sampleColor(palette);
       const p: Particle = {
@@ -381,89 +384,99 @@ export default function FireworkScene() {
         vx: Math.cos(angle) * speed,
         vy: Math.sin(angle) * speed,
         life: 0,
-        maxLife: isForm ? 4200 + Math.random() * 1400 : 1400 + Math.random() * 1400,
+        maxLife: isForm ? 4600 + Math.random() * 1600 : 1600 + Math.random() * 1600,
         size: isForm
-          ? pixSize * (0.92 + Math.random() * 0.18)
-          : (1.2 + Math.random() * 2.4) * scale,
+          ? pixSize * (0.93 + Math.random() * 0.18)
+          // EXPLODE PARTICLE SQUARE LEBIH BESAR (1.8x → 3.6x scale, bukan 1.2→2.4!)
+          : (1.8 + Math.random() * 3.5) * scale,
         color,
         kind: isForm ? "textForm" : "explode",
         alpha: 1,
-        gravity: isForm ? 0 : 0.00015 + Math.random() * 0.0002,
+        gravity: isForm ? 0 : 0.00015 + Math.random() * 0.00022,
         drag: isForm ? 0.986 : 0.988 - Math.random() * 0.008,
-        glow: isForm ? pixSize * 5.5 : 8 + Math.random() * 14 * scale,
+        glow: isForm ? pixSize * 6.2 : 10 + Math.random() * 16 * scale,
       };
       spawnParticle(p);
     }
-    for (let i = 0; i < (reduced ? 18 : 34) * scale; i++) {
+    // Sparkle particle size BESAR + SQUARE nanti di render
+    for (let i = 0; i < (reduced ? 22 : 40) * scale; i++) {
       const angle = Math.random() * Math.PI * 2;
-      const speed = (0.05 + Math.random() * 0.28) * scale;
+      const speed = (0.06 + Math.random() * 0.33) * scale;
       spawnParticle({
         x: cx,
         y: cy,
         vx: Math.cos(angle) * speed,
         vy: Math.sin(angle) * speed,
         life: 0,
-        maxLife: 600 + Math.random() * 950,
-        size: 0.6 + Math.random() * 1.3,
+        maxLife: 650 + Math.random() * 1100,
+        size: 1.0 + Math.random() * 1.7,
         color: sampleColor(palette),
         kind: "sparkle",
         alpha: 1,
         gravity: 0.00005,
         drag: 0.985,
-        glow: 6 + Math.random() * 11,
+        glow: 7 + Math.random() * 12,
       });
     }
     if (textForForm.length > 0) {
+      // ✅ FONT SIZE 1.5x LEBIH BESAR (clamp + persen of screen width)
       const fontSize =
         kind === "final"
-          ? Math.max(18, Math.min(40, cw * 0.075))
+          ? Math.max(24, Math.min(58, cw * 0.115))
           : kind === "main"
-          ? Math.max(20, Math.min(42, cw * 0.078))
-          : Math.max(14, Math.min(30, cw * 0.058));
-      const pts = sampleTextPoints(textForForm, fontSize, 0, cw, ch);
+          ? Math.max(28, Math.min(62, cw * 0.128))
+          : Math.max(22, Math.min(50, cw * 0.098));
+      // ✅ PUSAT TEXT = (cx, cy) — DI TEMPAT KEMBANG API MELEDAK! bukan tengah canvas
+      const pts = sampleTextPoints(textForForm, fontSize, 0, cw, ch, cx, cy);
       if (pts.length > 0) {
         const existingCandidates = particlesRef.current.filter(
           (p) => p.kind === "textForm" && p.tx === undefined && p.life < 200,
         );
-        const assignTo = (list: Particle[]) => {
+        const assignTargetsTo = (list: Particle[]) => {
           list.forEach((p, i) => {
             const t = pts[i % pts.length];
             p.tx = t.x;
             p.ty = t.y;
+            // ✅ TRUE TWEEN: simpan START POSISI (cx, cy = area ledakan) -> transisi jelas cinematic
+            p.startX = p.x;
+            p.startY = p.y;
             p.tweenT = 0;
-            p.tweenDur = 620 + Math.random() * 380;
+            p.tweenDur = 700 + Math.random() * 480;
           });
         };
-        assignTo(existingCandidates.slice(0, pts.length));
+        assignTargetsTo(existingCandidates.slice(0, pts.length));
         const assigned = Math.min(existingCandidates.length, pts.length);
         const remaining = pts.length - assigned;
         if (remaining > 0) {
           for (let k = assigned; k < pts.length; k++) {
             const t = pts[k];
             const angle = Math.random() * Math.PI * 2;
-            const speed = 0.1 + Math.random() * 0.45;
+            const speed = 0.11 + Math.random() * 0.48;
+            const sx = cx + (Math.random() - 0.5) * 10;
+            const sy = cy + (Math.random() - 0.5) * 10;
             spawnParticle({
-              x: cx + (Math.random() - 0.5) * 8,
-              y: cy + (Math.random() - 0.5) * 8,
+              x: sx,
+              y: sy,
               vx: Math.cos(angle) * speed,
               vy: Math.sin(angle) * speed,
               life: 0,
-              maxLife: 4300 + Math.random() * 1300,
-              size: pixSize * (0.9 + Math.random() * 0.2),
+              maxLife: 4700 + Math.random() * 1500,
+              size: pixSize * (0.91 + Math.random() * 0.21),
               color: Math.random() < 0.82 ? dominantColor : accentColor,
               kind: "textForm",
               alpha: 1,
               gravity: 0,
               drag: 0.986,
-              glow: pixSize * 5.5,
+              glow: pixSize * 6.2,
               tx: t.x,
               ty: t.y,
+              startX: sx,
+              startY: sy,
               tweenT: 0,
-              tweenDur: 640 + Math.random() * 400,
+              tweenDur: 720 + Math.random() * 520,
             });
           }
         }
-        // NO SHADOW PIXEL LAYER — dihapus sesuai permintaan
       }
     }
   };
@@ -533,7 +546,7 @@ export default function FireworkScene() {
       // Clear
       ctx.clearRect(0, 0, cw, ch);
 
-      // Draw stars (slow moving background)
+      // Draw stars (slow moving background) — SQUARE PIXEL FILLRECT (matching font pixel!)
       const stars = starsRef.current;
       for (let i = 0; i < stars.length; i++) {
         const s = stars[i];
@@ -549,26 +562,22 @@ export default function FireworkScene() {
         const flick = 0.6 + 0.4 * Math.sin(s.phase);
         ctx.globalAlpha = s.alpha * flick;
         ctx.fillStyle = "#ffffff";
-        ctx.beginPath();
-        ctx.arc(s.x, s.y, s.size, 0, Math.PI * 2);
-        ctx.fill();
+        const starSz = Math.max(1, s.size);
+        ctx.fillRect(s.x - starSz / 2, s.y - starSz / 2, starSz, starSz);
       }
       ctx.globalAlpha = 1;
 
-      // Rockets update + draw
+      // Rockets update + draw — ROCKET CORE = SQUARE (matching pixel art style)
       const rockets = rocketsRef.current;
       for (let i = rockets.length - 1; i >= 0; i--) {
         const r = rockets[i];
         r.t = Math.min(1, (now - r.startAt) / r.duration);
-        // Ease out for position (accelerating launch)
         const eased = 1 - Math.pow(1 - r.t, 2.6);
         r.y = r.startY + (r.targetY - r.startY) * eased;
-        // Trail
         r.trailTimer += dt;
         const spawnEvery = reduced ? 16 : 9;
         if (r.trailTimer >= spawnEvery) {
           r.trailTimer = 0;
-          // Rocket trail particle
           spawnParticle({
             x: r.x + (Math.random() - 0.5) * 1.5,
             y: r.y + r.size * 1.2,
@@ -576,15 +585,14 @@ export default function FireworkScene() {
             vy: 0.05 + Math.random() * 0.12,
             life: 0,
             maxLife: 500 + Math.random() * 400,
-            size: r.size * 0.6 + Math.random() * 0.8,
+            size: r.size * 0.6 + Math.random() * 0.9,
             color: Math.random() < 0.5 ? r.color : "#FFFFFF",
             kind: "rocketTrail",
             alpha: 1,
             gravity: 0.0,
             drag: 0.98,
-            glow: 8 + Math.random() * 6,
+            glow: 9 + Math.random() * 7,
           });
-          // Smoke occasionally
           if (Math.random() < 0.35) {
             spawnParticle({
               x: r.x + (Math.random() - 0.5) * 3,
@@ -593,7 +601,7 @@ export default function FireworkScene() {
               vy: 0.03 + Math.random() * 0.05,
               life: 0,
               maxLife: 800 + Math.random() * 700,
-              size: 2 + Math.random() * 2.2,
+              size: 2.1 + Math.random() * 2.4,
               color: "rgba(200,200,220,0.5)",
               kind: "smoke",
               alpha: 0.4,
@@ -603,29 +611,28 @@ export default function FireworkScene() {
             });
           }
         }
-        // Draw rocket
-        const grad = ctx.createRadialGradient(r.x, r.y, 0, r.x, r.y, r.size * 4.5);
+        // Rocket glow aura (lighter composite)
+        const grad = ctx.createRadialGradient(r.x, r.y, 0, r.x, r.y, r.size * 4.8);
         grad.addColorStop(0, "rgba(255,255,255,1)");
         grad.addColorStop(0.35, r.color + "cc");
         grad.addColorStop(1, r.color + "00");
         ctx.globalCompositeOperation = "lighter";
         ctx.fillStyle = grad;
         ctx.beginPath();
-        ctx.arc(r.x, r.y, r.size * 4.5, 0, Math.PI * 2);
+        ctx.arc(r.x, r.y, r.size * 4.8, 0, Math.PI * 2);
         ctx.fill();
         ctx.globalCompositeOperation = "source-over";
-        // Core
+        // ✅ Rocket CORE = SQUARE PIXEL (bukan lingkaran! Matching pixel art font & particles)
         ctx.fillStyle = "#FFFFFF";
-        ctx.beginPath();
-        ctx.arc(r.x, r.y, r.size * 0.9, 0, Math.PI * 2);
-        ctx.fill();
+        const coreSz = r.size * 1.15;
+        ctx.fillRect(r.x - coreSz / 2, r.y - coreSz / 2, coreSz, coreSz);
 
         if (r.t >= 1) {
           rockets.splice(i, 1);
         }
       }
 
-      // Particles update + draw (SINGLE PASS — SHADOW LAYER REMOVED per user request)
+      // Particles update + draw — SINGLE PASS, ALL PIXEL SQUARE, TRUE TWEEN CINEMATIC
       const arr = particlesRef.current;
       const nowMs = now;
 
@@ -636,96 +643,96 @@ export default function FireworkScene() {
         const aliveFrac = p.life / p.maxLife;
         if (aliveFrac >= 1) { arr.splice(i, 1); continue; }
 
-        if (p.kind === "textForm" && p.tx !== undefined && p.ty !== undefined) {
-          p.tweenT = (p.tweenT || 0) + dt;
-          const twDur = p.tweenDur || 720;
-          const twFrac = Math.min(1, p.tweenT / twDur);
-          // DIRECT LERP POSITION (NO VELOCITY OSCILLATION = NO BOUNCE!)
-          // Before: velocity-based gx/gy force → bisa overshoot target karena velocity inertia
-          // After: easeOutCubic lerp p.x directly from "current explode flight pos" -> "tx/ty"
-          // Simpan start posisi sekali di first tween tick via particle scratch micro-state trick p.tx/p.ty existing + init via first pos if not set — gunakan tx/ty sbg target, set start pos pake property hidden dgn Object.defineProperty or ref? Lebih simpel: simpan startX/Y via p.vx/vy DIPAKAI SEBAGAI START POS di tween frame pertama, lalu set flag dengan tx === undefined tidak mungkin, kita simpan p.startX/startY di particle dengan assign inline (TS allow any extra props via typed interface? Tapi Particle tidak punya startX. Solution: gunakan p.tweenT == 0 (frame pertama start tween) simpan pos SEBAGAI awal via closure variable tidak mungkin. Easier: di spawn explodeAt sudah assign tx/ty langsung particle baru, jadi TIDAK PUNYA start pos. GIMNA caranya start posisi = posisi saat tween dimulai? Workaround: gunakan easeOutExpo lerp — tiap frame set pos = lerp(pos, target, 0.085 * ...). Ini akan smooth settle NO OVERSHOOT & tidak butuh start pos.
+        const isText = p.kind === "textForm";
+
+        // ✅ TEXTFORM TRUE TWEEN CINEMATIC: startX/Y → tx/ty (bukan incremental lerp!)
+        // Transisi SMOOTH: partikel terbang explode beberapa frame (life<80ms), lalu start tween terkunci ke pixel huruf
+        // Visual: TERBANG TERLEBIH DAHULU → BERHENTI SEKARAT → MULAI MENYUSUN HURUF (smooth!)
+        if (isText && p.tx !== undefined && p.ty !== undefined) {
+          const TWEEN_DELAY = 70 + Math.random() * 80; // 70-150ms partikel "terbang acak" terlebih dahulu (explode feel)
+          const effT = Math.max(0, p.life - TWEEN_DELAY);
+          p.tweenT = effT;
+          const twDur = p.tweenDur || 780;
+          const twFrac = Math.min(1, effT / twDur);
           if (twFrac < 1) {
-            // Smoothly LERP current position directly toward target (NO VELOCITY, so no inertia bounce!)
-            // easeOutCubic strength lerp, no velocity vector accumulation
-            const lerpT = 1 - Math.pow(1 - Math.min(1, twFrac * 1.15), 3);
-            // Calculate current toward target
-            const towardX = p.tx - p.x;
-            const towardY = p.ty - p.y;
-            p.x += towardX * lerpT * Math.min(1, dt / 520);
-            p.y += towardY * lerpT * Math.min(1, dt / 520);
-            // Also dampen any leftover explode velocity (safety: no overshoot drift!)
-            p.vx *= 0.92;
-            p.vy *= 0.92;
-            if (Math.abs(towardX) < 0.25 && Math.abs(towardY) < 0.25) {
-              // Sudah dekat = langsung KUNCI, tidak usah tunggu twFrac penuh!
-              p.tweenT = twDur + 1;
-              p.x = p.tx;
-              p.y = p.ty;
+            // ✅ PHASE 1: Terbang acak sebentar (0-70/150ms) → velocity explode masih aktif (natural!)
+            if (p.life < TWEEN_DELAY) {
+              // Belum mulai tween = terbang sesuai velocity ledakan (fade gravity=0)
+              p.vx *= p.drag;
+              p.vy *= p.drag;
+              p.x += p.vx * dt;
+              p.y += p.vy * dt;
+            } else {
+              // ✅ PHASE 2: TRUE CINEMATIC TWEEN — easeOutCubic dari start posisi KE pixel huruf target (NO OVERSHOOT!)
+              const ease = 1 - Math.pow(1 - twFrac, 3);
+              if (p.startX === undefined) { p.startX = p.x; p.startY = p.y; }
+              const sX = p.startX!;
+              const sY = p.startY!;
+              p.x = sX + (p.tx! - sX) * ease;
+              p.y = sY + (p.ty! - sY) * ease;
+              // Zero velocity (pastikan tidak drift!)
               p.vx = 0;
               p.vy = 0;
             }
           } else {
-            // LOCK EKSACT — micro flicker hanya opacity, TIDAK POSISI (bounce = dari posisi bergoyang!)
+            // ✅ PHASE 3: LOCK PIXEL TOTAL di posisi huruf — selamanya, sampai fade out
             p.x = p.tx;
             p.y = p.ty;
             p.vx = 0;
             p.vy = 0;
           }
         } else {
+          // Non-text particle: normal physics (explode/sparkle/rocketTrail/smoke)
           p.vx *= p.drag;
           p.vy = p.vy * p.drag + p.gravity * dt;
           p.x += p.vx * dt;
           p.y += p.vy * dt;
         }
 
-        // Alpha fade
+        // Alpha fade (textForm bertahan lebih lama: 87% life baru fade, non-text = 78%)
         let alpha = 1;
-        const fadeEndFrac = p.kind === "textForm" ? 0.87 : 0.78;
-        const fadeInFrac = p.kind === "textForm" ? 0.05 : 0.12;
+        const fadeEndFrac = isText ? 0.89 : 0.79;
+        const fadeInFrac = isText ? 0.05 : 0.12;
         if (aliveFrac < fadeInFrac) alpha = aliveFrac / fadeInFrac;
         else if (aliveFrac > fadeEndFrac) alpha = Math.max(0, 1 - (aliveFrac - fadeEndFrac) / (1 - fadeEndFrac));
         if (p.kind === "smoke") alpha *= 0.4;
-        // Stabilize textForm: NO SIZE FLICKER! Posisi juga terkunci — opacity micro kedip tipis saja
+        // Micro flicker LED natural: ±4% opacity Saja (size TETAP SAMA!)
         const flickP =
-          p.kind === "textForm"
-            ? 0.96 + 0.04 * Math.sin(nowMs * 0.012 + i * 0.31)
+          isText
+            ? 0.965 + 0.035 * Math.sin(nowMs * 0.011 + i * 0.29)
             : 1;
         alpha *= flickP;
         p.alpha = alpha;
 
-        const isText = p.kind === "textForm";
-        // Glow aura
+        // Glow aura LED (all particles — non glow=0 soal smoke)
         if (p.glow > 0 && alpha > 0.03) {
-          const glowRadius = p.size * (isText ? 3.2 : 4.5);
+          const glowRadius = p.size * (isText ? 3.3 : 4.7);
           const g = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, glowRadius);
           g.addColorStop(0, p.color);
-          g.addColorStop(0.45, p.color + "55");
+          g.addColorStop(0.46, p.color + "4f");
           g.addColorStop(1, p.color + "00");
-          ctx.globalAlpha = alpha * (isText ? 0.65 : 0.9);
+          ctx.globalAlpha = alpha * (isText ? 0.66 : 0.9);
           ctx.fillStyle = g;
           ctx.beginPath();
           ctx.arc(p.x, p.y, glowRadius, 0, Math.PI * 2);
           ctx.fill();
         }
+        // ✅ ALL PARTICLES = SQUARE fillRect (100% pixel art style, matching font pixel!)
+        // Sebelumnya: explode, sparkle, rocketTrail = arc() BULAT → sekarang SEMUA KOTAK SAMA!
         ctx.globalAlpha = alpha;
         ctx.fillStyle = p.color;
-        if (isText) {
-          const sz = p.size;  // SAMA SELALU — TIDAK ADA SIZE FLICKER (menyebabkan "pulse/bounce")
-          ctx.fillRect(p.x - sz / 2, p.y - sz / 2, sz, sz);
-        } else {
-          ctx.beginPath();
-          ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
-          ctx.fill();
-        }
+        const sz = p.size;
+        const hsz = sz / 2;
+        ctx.fillRect(p.x - hsz, p.y - hsz, sz, sz);
       }
       ctx.globalAlpha = 1;
       ctx.globalCompositeOperation = "source-over";
 
-      // Update text opacity/scale for DOM overlay (SUPER FAINT HINT ONLY — 0.12 MAX opacity, 99% canvas pixels dominate!)
+      // ✅ DOM TEXT OVERLAY = MAX 0 OPACITY (100% DIHAPUS! Pixel font = 100% object utama)
       if (activeTextRef.current.length > 0) {
-        const targetOpacity = 0.12;
+        const targetOpacity = 0; // HARD ZERO — teks DOM TIDAK PERNAH MUNCUL!
         const targetScale = 1;
-        textOpacityRef.current += (targetOpacity - textOpacityRef.current) * Math.min(1, dt / 450);
+        textOpacityRef.current += (targetOpacity - textOpacityRef.current) * Math.min(1, dt / 220);
         textScaleRef.current += (targetScale - textScaleRef.current) * Math.min(1, dt / 500);
       } else {
         textOpacityRef.current += (0 - textOpacityRef.current) * Math.min(1, dt / 380);
@@ -776,6 +783,7 @@ export default function FireworkScene() {
       : textKindRef.current === "main"
       ? { fontSize: "clamp(1.8rem, 8vw, 3rem)", letterSpacing: "0.06em" }
       : { fontSize: "clamp(1rem, 4.6vw, 1.45rem)", letterSpacing: "0.02em", lineHeight: 1.25 };
+  void titleStyle; // preserved for future, currently unused since DOM overlay removed.
 
   return (
     <section
@@ -795,55 +803,6 @@ export default function FireworkScene() {
           touchAction: "none",
         }}
       />
-
-      {/* Centered text overlay with cinematic glow */}
-      <div
-        className="absolute inset-0 pointer-events-none flex items-center justify-center px-4"
-        style={{ zIndex: 5 }}
-        aria-hidden
-      >
-        <div
-          className="text-center select-none"
-          style={{
-            opacity: textOpacityRef.current,
-            transform: `scale(${textScaleRef.current})`,
-            transition: "none",
-            willChange: "opacity, transform",
-            maxWidth: "92%",
-          }}
-        >
-          <h2
-            className={`font-bold whitespace-pre-wrap break-words ${
-              textKindRef.current === "final"
-                ? "text-romantic"
-                : textKindRef.current === "main"
-                ? "tracking-widest uppercase"
-                : "font-semibold"
-            }`}
-            style={{
-              color: textKindRef.current === "final" ? "#FFD7E3" : "#FFF6D8",
-              // No strong text-shadow — it's just a readability hint, invisible to casual eye
-              textShadow: "0 1px 2px rgba(0,0,0,0.4)",
-              WebkitTextStroke: undefined,
-              ...titleStyle,
-            }}
-          >
-            {activeTextRef.current}
-          </h2>
-          {/* Sparkle decorations around text — also faint so it doesn't fight the pixel art */}
-          {activeTextRef.current.length > 0 && (
-            <div
-              className="mt-4 flex items-center justify-center gap-3 text-cinematic-gold"
-              style={{ opacity: Math.min(0.18, textOpacityRef.current * 1.6) }}
-              aria-hidden
-            >
-              <span style={{ fontSize: "1.2em", opacity: 0.8 }}>✦</span>
-              <span style={{ fontSize: "0.8em", opacity: 0.7 }}>✧</span>
-              <span style={{ fontSize: "1.2em", opacity: 0.8 }}>✦</span>
-            </div>
-          )}
-        </div>
-      </div>
 
       {/* Scene fade overlay for transition out */}
       <div
