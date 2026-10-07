@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import type { PointerEvent as RPointerEvent } from "react";
 import { useStory } from "../context/StoryContext";
 import { fireworkConfig as fwCfg } from "../config/media.js";
 
@@ -18,41 +19,43 @@ const FWState = {
 } as const;
 type FWStateKind = typeof FWState[keyof typeof FWState];
 
-type ParticleKind = "star" | "rocketTrail" | "smoke" | "explode" | "sparkle" | "textForm";
+// streak  = garis tipis memancar (ledakan utama, seperti di video)
+// blob    = gumpalan padat berwarna (awal setiap wish)
+// textForm= titik-titik penyusun huruf
+type ParticleKind = "streak" | "blob" | "sparkle" | "textForm";
 
 interface Particle {
   x: number;
   y: number;
   vx: number;
   vy: number;
-  life: number;
+  life: number; // boleh negatif = delay sebelum mulai
   maxLife: number;
   size: number;
   color: string;
   kind: ParticleKind;
-  alpha: number;
   gravity: number;
   drag: number;
-  glow: number;
+  // khusus textForm
   tx?: number;
   ty?: number;
   startX?: number;
   startY?: number;
-  tweenT?: number;
   tweenDur?: number;
+  fadeStart?: number;
+  fadeDur?: number;
 }
 
 interface Rocket {
   x: number;
   y: number;
+  startX: number;
   startY: number;
+  targetX: number;
   targetY: number;
-  vy: number;
   startAt: number;
   duration: number;
   color: string;
-  trailTimer: number;
-  exploded: boolean;
   size: number;
   t: number;
 }
@@ -67,20 +70,27 @@ interface FloatingStar {
   phase: number;
 }
 
-const PALETTE_MAIN = ["#FFB347", "#FFD07F", "#FFE9A8", "#FF8AA8", "#C9A8FF", "#FFFFFF"];
-const PALETTE_WISH = [
-  ["#FFB347", "#FFD07F", "#FFE9A8", "#FFFFFF"], // 1. Warm Gold Sunset
-  ["#FF6B9D", "#FF8AA8", "#FFC9DE", "#FFFFFF"], // 2. Raspberry Pink
-  ["#A084FF", "#C9A8FF", "#E8D9FF", "#FFFFFF"], // 3. Lavender Purple
-  ["#67C6FF", "#8AD9FF", "#C9ECFF", "#FFFFFF"], // 4. Sky Blue Ice
-  ["#6DE39A", "#9CFFB0", "#D5FFDC", "#FFFFFF"], // 5. Mint Emerald
-  ["#FFD86B", "#FFE08A", "#FFF0C4", "#FFFFFF"], // 6. Bright Sun Gold
-  ["#FF7EB9", "#FF9CC6", "#FFCFE0", "#FFFFFF"], // 7. Magenta Blush
+interface TextAnim {
+  textFormationDuration: number;
+  textHoldDuration: number;
+  fadeDuration: number;
+}
+
+// Warna ledakan utama (biru seperti di video)
+const STREAK_BLUE = ["#2F6BFF", "#4F8BFF", "#7FB0FF", "#A8CCFF"];
+// Warna wish: kuning, hijau, pink, tosca, ungu, biru, oranye (primer, aksen)
+const PALETTE_WISH: string[][] = [
+  ["#FFD84A", "#FFF0A0"],
+  ["#7CFF5B", "#C6FF9A"],
+  ["#FF7BD5", "#FFB3EA"],
+  ["#40F0D0", "#A0FFEA"],
+  ["#B07CFF", "#DCC8FF"],
+  ["#5AA8FF", "#B0D6FF"],
+  ["#FF9A4A", "#FFCB9C"],
 ];
 
-function sampleColor(arr: string[]) {
-  return arr[(Math.random() * arr.length) | 0];
-}
+// konstanta: jarak total partikel = v0 * K(drag)
+const kDist = (drag: number) => 16.67 / -Math.log(drag);
 
 export default function FireworkScene() {
   const { currentScene, goToScene, tryAutoStartScene2 } = useStory();
@@ -90,20 +100,18 @@ export default function FireworkScene() {
   const containerRef = useRef<HTMLDivElement | null>(null);
 
   const stateRef = useRef<FWStateKind>(FWState.IDLE);
-  const [, setRenderTick] = useState(0);
-  const forceRerender = () => setRenderTick((v) => (v + 1) & 0xffff);
-  const textOpacityRef = useRef(0);
-  const textScaleRef = useRef(0.85);
-  const activeTextRef = useRef<string>("");
-  const textKindRef = useRef<"main" | "wish" | "final">("main");
+  const [hintOn, setHintOn] = useState(false);
   const doneTriggeredRef = useRef(false);
   const startedRef = useRef(false);
   const musicStartedRef = useRef(false);
   const timersRef = useRef<number[]>([]);
   const finalScheduledRef = useRef(false);
+  const lastTapRef = useRef(0);
+  const tapIdxRef = useRef(0);
+  const paletteIdxRef = useRef(0);
 
   // ==========================================
-  // BACKWARD COMPAT: Firework Config Normalizer
+  // Firework Config Normalizer (format lama & baru)
   // ==========================================
   const resolvedCfg = useMemo(() => {
     const raw = fwCfg && fwCfg.enabled ? fwCfg : null;
@@ -116,37 +124,36 @@ export default function FireworkScene() {
       };
     }
     const main = Object.assign(
-      { text: "HAPPY BIRTHDAY", launchDuration: 1800, explosionDelay: 300, textFormationDuration: 1000, textHoldDuration: 2200, displayDuration: 2800 },
+      { text: "HAPPY BIRTHDAY!", launchDuration: 1800, explosionDelay: 300, textFormationDuration: 1000, textHoldDuration: 2200, displayDuration: 2800 },
       raw.mainBirthday || {},
     );
-    // Compute effective displayDuration if not explicit but formation + hold provided
     if (main.displayDuration < 1500 && main.textFormationDuration > 0 && main.textHoldDuration > 0) {
       main.displayDuration = (main.explosionDelay || 0) + main.textFormationDuration + main.textHoldDuration;
     }
     const ending = Object.assign({ text: "", duration: 3000, launchDuration: 1900 }, raw.ending || {});
 
-    // --- Wishes normalizer: support BOTH formats NEW (wishes:{interval, animation, items[]}) & OLD (wishes: string[]) ---
     let interval = 1000;
     let animWish = { launchDuration: 720, explosionDelay: 260, textFormationDuration: 900, textHoldDuration: 1800, fadeDuration: 900 };
     let items: any[] = [];
 
+    const spreadDefault = [
+      { x: 0.50, y: 0.22 }, { x: 0.24, y: 0.40 }, { x: 0.76, y: 0.40 },
+      { x: 0.50, y: 0.58 }, { x: 0.22, y: 0.72 }, { x: 0.78, y: 0.72 },
+      { x: 0.50, y: 0.40 }, { x: 0.32, y: 0.58 }, { x: 0.68, y: 0.58 },
+    ];
+    const fromStrings = (strings: string[]) =>
+      strings.map((text, i) => ({
+        text,
+        position: spreadDefault[i % spreadDefault.length],
+        launch: { x: 0.5, y: 0.95 },
+      }));
+
     const rawWishes: any = raw.wishes;
     if (Array.isArray(rawWishes)) {
-      // FORMAT LAMA: wishes = string[] (atau any[] teks). Convert ke items.
       const strings = rawWishes.map((s: any) => String(s || "")).filter(Boolean);
       interval = typeof (raw as any).wishInterval === "number" ? (raw as any).wishInterval : interval;
-      const spread = [
-        { x: 0.50, y: 0.22 }, { x: 0.24, y: 0.40 }, { x: 0.76, y: 0.40 },
-        { x: 0.50, y: 0.58 }, { x: 0.22, y: 0.72 }, { x: 0.78, y: 0.72 },
-        { x: 0.50, y: 0.40 }, { x: 0.32, y: 0.58 }, { x: 0.68, y: 0.58 },
-      ];
-      items = strings.map((text: string, i: number) => ({
-        text,
-        position: spread[i % spread.length],
-        launch: { x: 0.50, y: 0.95 },
-      }));
+      items = fromStrings(strings);
     } else if (rawWishes && typeof rawWishes === "object") {
-      // FORMAT BARU: wishes { interval, animation, items: [] }
       if (typeof rawWishes.interval === "number") interval = Math.max(100, rawWishes.interval);
       else if (typeof (raw as any).wishInterval === "number") interval = Math.max(100, (raw as any).wishInterval);
       if (rawWishes.animation && typeof rawWishes.animation === "object") {
@@ -159,26 +166,22 @@ export default function FireworkScene() {
             const text = typeof it === "string" ? it : String(it.text || "");
             if (!text) return null;
             const pos = it.position || it.pos || null;
-            const posX = pos && typeof pos.x === "number" ? pos.x : 0.50;
-            const posY = pos && typeof pos.y === "number" ? pos.y : 0.40;
             const lch = it.launch || it.from || null;
-            const lchX = lch && typeof lch.x === "number" ? lch.x : 0.50;
-            const lchY = lch && typeof lch.y === "number" ? lch.y : 0.95;
-            return { text, position: { x: posX, y: posY }, launch: { x: lchX, y: lchY } };
+            return {
+              text,
+              position: {
+                x: pos && typeof pos.x === "number" ? pos.x : 0.5,
+                y: pos && typeof pos.y === "number" ? pos.y : 0.4,
+              },
+              launch: {
+                x: lch && typeof lch.x === "number" ? lch.x : 0.5,
+                y: lch && typeof lch.y === "number" ? lch.y : 0.95,
+              },
+            };
           })
           .filter(Boolean);
       } else if (Array.isArray(rawWishes._legacyList) && rawWishes._legacyList.length > 0) {
-        // Fallback legacy list jika items kosong
-        const strings = rawWishes._legacyList.map(String).filter(Boolean);
-        const spread = [
-          { x: 0.50, y: 0.22 }, { x: 0.24, y: 0.40 }, { x: 0.76, y: 0.40 },
-          { x: 0.50, y: 0.58 }, { x: 0.22, y: 0.72 }, { x: 0.78, y: 0.72 },
-        ];
-        items = strings.map((text: string, i: number) => ({
-          text,
-          position: spread[i % spread.length],
-          launch: { x: 0.50, y: 0.95 },
-        }));
+        items = fromStrings(rawWishes._legacyList.map(String).filter(Boolean));
         if (typeof rawWishes._legacyInterval === "number") interval = rawWishes._legacyInterval;
       }
     }
@@ -192,24 +195,21 @@ export default function FireworkScene() {
   }, []);
 
   const wishes = useMemo(() => resolvedCfg.wishes.items || [], [resolvedCfg]);
-  const wishIdxRef = useRef(0);
 
   const reduced = typeof window !== "undefined"
     ? window.matchMedia?.("(prefers-reduced-motion: reduce)").matches
     : false;
-  const MAX_PARTICLES = reduced ? 160 : 280;
+  const MAX_PARTICLES = reduced ? 1400 : 2600;
 
   const particlesRef = useRef<Particle[]>([]);
   const rocketsRef = useRef<Rocket[]>([]);
   const starsRef = useRef<FloatingStar[]>([]);
   const transitionOutStartRef = useRef<number>(0);
-  const sceneFadeRef = useRef(0);
 
+  // Partikel teks SELALU masuk (agar huruf tidak bolong); efek lain dibuang bila penuh.
   const spawnParticle = (p: Particle) => {
     const arr = particlesRef.current;
-    if (arr.length >= MAX_PARTICLES) {
-      arr.splice(0, arr.length - MAX_PARTICLES + 1);
-    }
+    if (p.kind !== "textForm" && arr.length >= MAX_PARTICLES) return;
     arr.push(p);
   };
 
@@ -226,18 +226,17 @@ export default function FireworkScene() {
     return id;
   };
 
-  // Init floating stars background
   const initStars = (w: number, h: number) => {
-    const count = reduced ? 35 : 65;
+    const count = reduced ? 45 : 90;
     const arr: FloatingStar[] = [];
     for (let i = 0; i < count; i++) {
       arr.push({
         x: Math.random() * w,
         y: Math.random() * h,
-        vx: (Math.random() - 0.5) * 0.08,
-        vy: -0.04 - Math.random() * 0.08,
-        size: Math.random() * 1.6 + 0.4,
-        alpha: 0.3 + Math.random() * 0.6,
+        vx: (Math.random() - 0.5) * 0.02,
+        vy: -0.005 - Math.random() * 0.02,
+        size: Math.random() < 0.15 ? 2 : 1,
+        alpha: 0.35 + Math.random() * 0.6,
         phase: Math.random() * Math.PI * 2,
       });
     }
@@ -248,530 +247,413 @@ export default function FireworkScene() {
     stateRef.current = FWState.IDLE;
     particlesRef.current = [];
     rocketsRef.current = [];
-    textOpacityRef.current = 0;
-    textScaleRef.current = 0.85;
-    activeTextRef.current = "";
-    textKindRef.current = "main";
-    wishIdxRef.current = 0;
     doneTriggeredRef.current = false;
-    sceneFadeRef.current = 0;
     transitionOutStartRef.current = 0;
     finalScheduledRef.current = false;
+    tapIdxRef.current = 0;
+    paletteIdxRef.current = 0;
     clearTimers();
-    forceRerender();
+    setHintOn(false);
   };
 
-  // ✅ Text sampling: safe area + padding dinamis + 2 lines BALANCE wrap + scale down if overflow + pixel bounding box hitung TERAKHIR
+  // =====================================================================
+  // Sampling teks -> titik-titik tipis (tanpa outline, font tidak terlalu tebal)
+  // Maks 2 baris, seimbang, otomatis mengecil bila melebihi safe area.
+  // =====================================================================
   const sampleTextPoints = (
     text: string,
     fontSize: number,
-    targetCount: number,
     cw: number,
     ch: number,
     centerX: number,
     centerY: number,
   ): { x: number; y: number }[] => {
     const off = document.createElement("canvas");
-    const scale = 2;
-    off.width = Math.max(2, Math.ceil(cw * scale));
-    off.height = Math.max(2, Math.ceil(ch * scale));
+    off.width = Math.max(2, Math.ceil(cw));
+    off.height = Math.max(2, Math.ceil(ch));
     const octx = off.getContext("2d", { willReadFrequently: true });
     if (!octx) return [];
-    octx.scale(scale, scale);
     octx.fillStyle = "#fff";
     octx.textAlign = "center";
     octx.textBaseline = "middle";
 
-    // SAFE AREA LAYER 1: Persentase layar + pixel minimal
-    const rawSafePadX = Math.max(18, cw * 0.085);  // 18px + 8.5% width (naik dari 7%)
-    const rawSafePadY = Math.max(26, ch * 0.095);  // 26px + 9.5% height (naik dari 8%)
-    // SAFE AREA LAYER 2: IPHONE EXPLICIT HARDCODE (Dynamic Island 59px top, Home Indicator 34px bottom)
-    const safeAreaTop = Math.max(rawSafePadY, 59 + 26);   // Dynamic Island 59px + 26px breathing space = MIN 85px ATAS
-    const safeAreaBottom = Math.max(rawSafePadY, 34 + 26); // Home Indicator 34px + 26px breathing space = MIN 60px BAWAH
-    const safePadX = rawSafePadX;
-    // Safe bounds (canvas pixel yang BOLEH ditempati text pixel)
+    const safePadX = Math.max(18, cw * 0.08);
     const safeL = safePadX;
     const safeR = cw - safePadX;
-    const safeT = safeAreaTop;
-    const safeB = ch - safeAreaBottom;
+    const safeT = Math.max(100, ch * 0.12); // beri ruang untuk label "TAP-TAP"
+    const safeB = ch - Math.max(60, ch * 0.08);
     const safeW = Math.max(60, safeR - safeL);
-    const safeH = Math.max(120, safeB - safeT);
 
-    const words = text.split(/\s+/).filter(Boolean);
-    let lines: string[] = [];
-    let fs = Math.max(10, Math.min(fontSize, cw * 0.145));
-
-    // 1) Cari line split BALANCE (paling seimbang width kedua line) — MAKSIMAL 2 BARIS
-    const fontStr = (size: number) => `900 ${size}px Inter, system-ui, -apple-system, Segoe UI, sans-serif`;
-    const measureWidth = (str: string, size: number) => {
-      octx.font = fontStr(size);
+    const fontStr = (s: number) => `700 ${s}px Inter, system-ui, -apple-system, "Segoe UI", sans-serif`;
+    const measure = (str: string, s: number) => {
+      octx.font = fontStr(s);
       return octx.measureText(str).width;
     };
-    // Pencarian split paling seimbang: total 1..n kata di line1, sisanya line2.
-    if (words.length <= 1 || text.length <= 16) {
-      lines = [text];
-    } else {
-      let best: { i: number; diff: number } = { i: Math.ceil(words.length / 2), diff: Infinity };
-      for (let i = 1; i <= words.length - 1; i++) {
-        const a = words.slice(0, i).join(" ");
-        const b = words.slice(i).join(" ");
-        const wa = measureWidth(a, fs);
-        const wb = measureWidth(b, fs);
-        const diff = Math.abs(wa - wb);
+
+    let fs = Math.max(12, fontSize);
+    const words = text.split(/\s+/).filter(Boolean);
+    let lines: string[] = [text];
+    if (words.length > 1 && text.length > 10) {
+      let best = { i: 1, diff: Infinity };
+      for (let i = 1; i < words.length; i++) {
+        const a = measure(words.slice(0, i).join(" "), fs);
+        const b = measure(words.slice(i).join(" "), fs);
+        const diff = Math.abs(a - b);
         if (diff < best.diff) best = { i, diff };
       }
       lines = [words.slice(0, best.i).join(" "), words.slice(best.i).join(" ")];
     }
 
-    // 2) Auto SCALE DOWN fs jika total width/height melebihi SAFE BOUNDS.
-    //    Ukur lagi setelah split, loop kurangi fs sampai masuk safe. LEBIH KETAT (0.94, bukan 0.995)
-    const maxIter = 20;
-    for (let it = 0; it < maxIter; it++) {
-      const lh = fs * 1.26;
-      octx.font = fontStr(fs);
-      let maxLineW = 0;
-      for (const l of lines) maxLineW = Math.max(maxLineW, octx.measureText(l).width);
-      const totalH = lh * lines.length;
-      if (maxLineW <= safeW * 0.92 && totalH <= safeH * 0.92) break;
-      fs = Math.max(10, fs * 0.88);
-      if (fs <= 10) break;
+    for (let it = 0; it < 24; it++) {
+      let maxW = 0;
+      for (const l of lines) maxW = Math.max(maxW, measure(l, fs));
+      if (maxW <= safeW * 0.9) break;
+      fs = Math.max(12, fs * 0.92);
     }
-    // Tambahan: pixel size offset padding (anti crop pinggiran font saat raster)
-    // NAIK: 10% dari font size, MIN 4px (dulu 8% min 3px)
-    const pixPadX = Math.max(4, Math.round(fs * 0.10));
-    const pixPadY = Math.max(4, Math.round(fs * 0.10));
 
-    // 3) Hitung BOUNDING BOX text (centerX, centerY) → geser centerX/Y jika keluar safe area.
-    //    LINE HEIGHT sama persis dengan scale down loop agar hitungan bounding konsisten
-    const lh = fs * 1.26;
+    const lh = fs * 1.3;
+    let maxW = 0;
+    for (const l of lines) maxW = Math.max(maxW, measure(l, fs));
+    const halfW = maxW / 2 + 4;
+    const halfH = (lh * lines.length) / 2 + 4;
+    let cx = centerX;
+    let cy = centerY;
+    if (cx - halfW < safeL) cx = safeL + halfW;
+    if (cx + halfW > safeR) cx = safeR - halfW;
+    if (cy - halfH < safeT) cy = safeT + halfH;
+    if (cy + halfH > safeB) cy = safeB - halfH;
+
     octx.font = fontStr(fs);
-    let maxLineW = 0;
-    for (const l of lines) maxLineW = Math.max(maxLineW, octx.measureText(l).width);
-    const totalW = maxLineW + pixPadX * 2;
-    const totalH = lh * lines.length + pixPadY * 2;
+    const startY = cy - ((lines.length - 1) * lh) / 2;
+    lines.forEach((line, i) => octx.fillText(line, cx, startY + i * lh));
 
-    let targetCenterX = centerX;
-    let targetCenterY = centerY;
-    // Clamp box supaya FULLY WITHIN SAFE AREA (beri extra margin 4px lagi agar TIDAK MEPET)
-    const extraBreath = 4;
-    const halfW = totalW / 2 + extraBreath;
-    const halfH = totalH / 2 + extraBreath;
-    const boxL = targetCenterX - halfW;
-    const boxR = targetCenterX + halfW;
-    const boxT = targetCenterY - halfH;
-    const boxB = targetCenterY + halfH;
-    if (boxL < safeL) targetCenterX += (safeL - boxL);
-    if (boxR > safeR) targetCenterX -= (boxR - safeR);
-    if (boxT < safeT) targetCenterY += (safeT - boxT);
-    if (boxB > safeB) targetCenterY -= (boxB - safeB);
-
-    // 4) Draw text di offscreen. START Y = targetCenterY + center align lines
-    const startY = targetCenterY - ((lines.length - 1) * lh) / 2;
-    lines.forEach((line, i) => {
-      // Font: Inter BLACK 900 = pixel bentuk solid, tipis tidak akan hilang
-      octx.font = fontStr(fs);
-      octx.fillText(line, targetCenterX, startY + i * lh);
-    });
-
-    // 5) Rasterize alpha → points. STEP PALING KECIL = 5px scale*2.5 (LEBIH PADAT SAMPLING!)
-    //    Step kecil = pixel LEBIH BANYAK → huruf TIDAK BOLONG, bentuk JELAS TERBACA
     const img = octx.getImageData(0, 0, off.width, off.height).data;
-    const ptsBase: { x: number; y: number }[] = [];
-    const step = Math.max(5, Math.floor(scale * 2.5));
-    // ALPHA THRESHOLD PALING RENDAH = 90 (PINGGIR HURUF LENGKUNG S, O, R TETAP MASUK — TIDAK TERIPOTONG!)
-    const aThresh = 90;
+    const step = Math.max(3, Math.round(fs / 9));
+    const pts: { x: number; y: number }[] = [];
     for (let y = 0; y < off.height; y += step) {
       for (let x = 0; x < off.width; x += step) {
-        const a = img[(y * off.width + x) * 4 + 3];
-        if (a > aThresh) {
-          const px = Math.round(x / scale);
-          const py = Math.round(y / scale);
-          if (px >= safeL + extraBreath && px <= safeR - extraBreath && py >= safeT + extraBreath && py <= safeB - extraBreath) {
-            ptsBase.push({ x: px, y: py });
-          }
-        }
-      }
-    }
-    // ✨ OUTLINE PUTIH 1 PIXEL: Tambahkan pixel TETANGGA (atas/bawah/kiri/kanan) SETIAP titik text
-    //    Hasil = text pixel PUNYA BINGKAI PUTIH OTOMATIS → BISA TERBACA JELAS walau ada ledakan warna WARNI di BELAKANG!
-    const pts: { x: number; y: number; outlined?: boolean }[] = [...ptsBase];
-    const outlineStep = Math.max(3, step - 2); // Outline 3-4px (1 pixel board offset)
-    for (const p of ptsBase) {
-      const neighbors: [number, number][] = [
-        [p.x - outlineStep, p.y], // kiri
-        [p.x + outlineStep, p.y], // kanan
-        [p.x, p.y - outlineStep], // atas
-        [p.x, p.y + outlineStep], // bawah
-      ];
-      for (const [nx, ny] of neighbors) {
-        if (nx >= safeL + extraBreath && nx <= safeR - extraBreath &&
-            ny >= safeT + extraBreath && ny <= safeB - extraBreath) {
-          // Cek duplikat (tidak usah ketat, biarin sedikit overlap = outline lebih tegas)
-          pts.push({ x: nx, y: ny, outlined: true });
+        if (img[(y * off.width + x) * 4 + 3] > 120) {
+          pts.push({ x: x + (Math.random() - 0.5) * 0.8, y: y + (Math.random() - 0.5) * 0.8 });
         }
       }
     }
     if (pts.length === 0) {
-      for (let i = 0; i < targetCount; i++) {
-        pts.push({ x: targetCenterX + (Math.random() - 0.5) * 160, y: targetCenterY + (Math.random() - 0.5) * 60 });
+      for (let i = 0; i < 80; i++) {
+        pts.push({ x: cx + (Math.random() - 0.5) * 140, y: cy + (Math.random() - 0.5) * 40 });
       }
     }
-    return pts as { x: number; y: number }[];
+    return pts;
   };
 
-  // ========================================================
-  // FIREWORK LAUNCHERS + TIMELINE OVERLAP SCHEDULER (1 sec)
-  // ========================================================
+  // =====================================================================
+  // EFEK LEDAKAN
+  // =====================================================================
+
+  // Garis-garis tipis memancar (burst biru di video)
+  const spawnStreaks = (
+    cx: number,
+    cy: number,
+    count: number,
+    radius: number,
+    colors: string[],
+    lifeBase: number,
+  ) => {
+    const drag = 0.965;
+    const K = kDist(drag);
+    for (let i = 0; i < count; i++) {
+      const angle = Math.random() * Math.PI * 2;
+      const dist = radius * (0.45 + Math.random() * 0.55);
+      const v0 = dist / K;
+      spawnParticle({
+        x: cx,
+        y: cy,
+        vx: Math.cos(angle) * v0,
+        vy: Math.sin(angle) * v0,
+        life: 0,
+        maxLife: lifeBase + Math.random() * lifeBase * 0.5,
+        size: 1,
+        color: colors[(Math.random() * colors.length) | 0],
+        kind: "streak",
+        gravity: 0.00004,
+        drag,
+      });
+    }
+  };
+
+  // Titik-titik teks yang mengalir dari pusat ledakan ke posisi huruf
+  const spawnTextDots = (
+    cx: number,
+    cy: number,
+    pts: { x: number; y: number }[],
+    colors: string[],
+    anim: TextAnim,
+    size: number,
+  ) => {
+    for (let i = 0; i < pts.length; i++) {
+      const t = pts[i];
+      const delay = Math.random() * 220;
+      const tweenDur = anim.textFormationDuration * (0.75 + Math.random() * 0.4);
+      const fadeStart = tweenDur + anim.textHoldDuration;
+      const sx = cx + (Math.random() - 0.5) * 14;
+      const sy = cy + (Math.random() - 0.5) * 14;
+      spawnParticle({
+        x: sx,
+        y: sy,
+        vx: 0,
+        vy: 0,
+        life: -delay,
+        maxLife: fadeStart + anim.fadeDuration,
+        size,
+        color: Math.random() < 0.8 ? colors[0] : colors[1] ?? colors[0],
+        kind: "textForm",
+        gravity: 0,
+        drag: 1,
+        tx: t.x,
+        ty: t.y,
+        startX: sx,
+        startY: sy,
+        tweenDur,
+        fadeStart,
+        fadeDur: anim.fadeDuration,
+      });
+    }
+  };
+
+  // MAIN / FINAL: burst garis tipis + teks putih dari titik-titik
+  const explodeMain = (
+    cx: number,
+    cy: number,
+    text: string,
+    cw: number,
+    ch: number,
+    opts: {
+      streakColors: string[];
+      textColors: string[];
+      radiusMul: number;
+      count: number;
+      fontSize: number;
+      anim: TextAnim;
+    },
+  ) => {
+    const radius = cw * 0.36 * opts.radiusMul;
+    spawnStreaks(cx, cy, Math.floor(opts.count * (reduced ? 0.6 : 1)), radius, opts.streakColors, 2200);
+    // percikan putih kecil
+    const sparkN = reduced ? 14 : 28;
+    for (let i = 0; i < sparkN; i++) {
+      const angle = Math.random() * Math.PI * 2;
+      const v0 = (radius * (0.2 + Math.random() * 0.6)) / kDist(0.97);
+      spawnParticle({
+        x: cx, y: cy,
+        vx: Math.cos(angle) * v0, vy: Math.sin(angle) * v0,
+        life: 0, maxLife: 900 + Math.random() * 900,
+        size: 2, color: "#FFFFFF", kind: "sparkle", gravity: 0.00006, drag: 0.97,
+      });
+    }
+    if (text.length > 0) {
+      const pts = sampleTextPoints(text, opts.fontSize, cw, ch, cx, cy);
+      spawnTextDots(cx, cy, pts, opts.textColors, opts.anim, 2);
+    }
+  };
+
+  // WISH: gumpalan berwarna padat + burst kecil + teks berwarna
+  const explodeWish = (
+    cx: number,
+    cy: number,
+    text: string,
+    palette: string[],
+    cw: number,
+    ch: number,
+    anim: TextAnim,
+  ) => {
+    const [c1, c2] = palette;
+    // 1) gumpalan padat berduri
+    const blobN = reduced ? 140 : 260;
+    const Rb = cw * 0.085;
+    const drag = 0.9;
+    const K = kDist(drag);
+    for (let i = 0; i < blobN; i++) {
+      const angle = Math.random() * Math.PI * 2;
+      let r = Rb * Math.sqrt(Math.random());
+      if (Math.random() < 0.14) r = Rb * (1.15 + Math.random() * 0.5); // duri
+      const v0 = r / K;
+      spawnParticle({
+        x: cx, y: cy,
+        vx: Math.cos(angle) * v0, vy: Math.sin(angle) * v0,
+        life: 0,
+        maxLife: 1000 + Math.random() * 700,
+        size: Math.random() < 0.3 ? 3 : 2,
+        color: Math.random() < 0.72 ? c1 : c2,
+        kind: "blob",
+        gravity: 0.00002,
+        drag,
+      });
+    }
+    // 2) burst garis kecil di dekat teks (warna lain)
+    const other = PALETTE_WISH[(Math.random() * PALETTE_WISH.length) | 0];
+    const ox = cx + (Math.random() < 0.5 ? -1 : 1) * cw * (0.12 + Math.random() * 0.1);
+    const oy = cy - ch * (0.03 + Math.random() * 0.05);
+    spawnStreaks(
+      Math.min(cw - 24, Math.max(24, ox)),
+      Math.max(60, oy),
+      reduced ? 22 : 44,
+      cw * 0.1,
+      [other[0], other[1]],
+      1300,
+    );
+    // 3) teks
+    if (text.length > 0) {
+      const fontSize = Math.max(18, Math.min(34, cw * 0.075));
+      const pts = sampleTextPoints(text, fontSize, cw, ch, cx, cy);
+      spawnTextDots(cx, cy, pts, [c1, c2], anim, 2);
+    }
+  };
+
+  // =====================================================================
+  // LAUNCHER + TIMELINE
+  // =====================================================================
   const launchOneFirework = (
     cw: number,
     ch: number,
-    payload: {
-      text: string;
-      position: { x: number; y: number };
-      launch: { x: number; y: number };
-    },
+    payload: { text: string; position: { x: number; y: number }; launch: { x: number; y: number } },
     palette: string[],
-    animCfg: { launchDuration: number; explosionDelay: number },
+    animCfg: { launchDuration: number } & Partial<TextAnim>,
     kind: "main" | "wish" | "final",
-    scale: number,
     onExploded?: () => void,
   ) => {
-    // Launch start = launch.x * cw, launch.y * ch (default: tengah bawah = 0.5*cw, 0.95*ch)
-    const startX = cw * (typeof payload.launch.x === "number" ? payload.launch.x : 0.50);
+    const startX = cw * (typeof payload.launch.x === "number" ? payload.launch.x : 0.5);
     const startY = ch * (typeof payload.launch.y === "number" ? payload.launch.y : 0.95) + 10;
-    // Explosion target position = position.x * cw, position.y * ch
-    const targetY = ch * (typeof payload.position.y === "number" ? payload.position.y : 0.30);
-    const targetX = cw * (typeof payload.position.x === "number" ? payload.position.x : 0.50);
-    // Rocket berjalan miring (startX,Y → targetX,targetY) karena beberapa wish posisi kiri/kanan bukan tengah
+    const targetX = cw * (typeof payload.position.x === "number" ? payload.position.x : 0.5);
+    const targetY = ch * (typeof payload.position.y === "number" ? payload.position.y : 0.3);
     const duration = Math.max(450, animCfg.launchDuration || 720);
-    const palette0 = palette[0] || "#FFD07F";
-    const rocket: Rocket = {
-      x: startX,
-      y: startY,
-      startY,
-      targetY,
-      vy: 0,
-      startAt: performance.now(),
-      duration,
-      color: palette0,
-      trailTimer: 0,
-      exploded: false,
-      size: kind === "final" ? 5.3 : kind === "main" ? 4.3 : 3.7,
+
+    rocketsRef.current.push({
+      x: startX, y: startY, startX, startY, targetX, targetY,
+      startAt: performance.now(), duration,
+      color: kind === "wish" ? palette[0] : "#D8FF5A",
+      size: kind === "wish" ? 2.4 : 3,
       t: 0,
+    });
+
+    const textAnim: TextAnim = {
+      textFormationDuration: animCfg.textFormationDuration ?? 1000,
+      textHoldDuration: animCfg.textHoldDuration ?? 2000,
+      fadeDuration: animCfg.fadeDuration ?? 900,
     };
-    (rocket as any).targetX = targetX; // reuse di draw loop nanti untuk lerp x juga (bukan cuma y!)
-    (rocket as any).startX = startX;
-    rocketsRef.current.push(rocket);
+
     addTimer(() => {
-      explodeAt(targetX, targetY, palette, scale, cw, ch, payload.text, kind);
+      if (kind === "wish") {
+        explodeWish(targetX, targetY, payload.text, palette, cw, ch, textAnim);
+      } else if (kind === "main") {
+        explodeMain(targetX, targetY, payload.text, cw, ch, {
+          streakColors: STREAK_BLUE,
+          textColors: ["#EAF2FF", "#A8CCFF"],
+          radiusMul: 1,
+          count: 190,
+          fontSize: Math.max(24, Math.min(44, cw * 0.095)),
+          anim: textAnim,
+        });
+      } else {
+        explodeMain(targetX, targetY, payload.text, cw, ch, {
+          streakColors: ["#FFD86B", "#FF8AA8", "#FFE9A8", "#C9A8FF", "#FFFFFF"],
+          textColors: ["#FFE9A8", "#FFFFFF"],
+          radiusMul: 1.15,
+          count: 240,
+          fontSize: Math.max(24, Math.min(46, cw * 0.1)),
+          anim: textAnim,
+        });
+      }
       if (onExploded) onExploded();
     }, duration + 20);
   };
 
-  // ✅ START MAIN BIRTHDAY (posisi tengah, launch dari tengah bawah) → setelah selesai displayDuration → schedule ALL wishes OVERLAP
   const startMainBirthday = (cw: number, ch: number) => {
     stateRef.current = FWState.MAIN_LAUNCH;
     const main = resolvedCfg.mainBirthday;
     launchOneFirework(
       cw, ch,
+      { text: main.text, position: { x: 0.5, y: 0.27 }, launch: { x: 0.5, y: 0.97 } },
+      STREAK_BLUE,
       {
-        text: main.text,
-        position: { x: 0.50, y: 0.24 },  // posisi ledakan: tengah atas
-        launch:   { x: 0.50, y: 0.95 },  // launch: TENGAH BAWAH (sesuai spec!)
+        launchDuration: main.launchDuration,
+        textFormationDuration: main.textFormationDuration,
+        textHoldDuration: main.textHoldDuration,
+        fadeDuration: 1100,
       },
-      PALETTE_MAIN,
-      { launchDuration: main.launchDuration, explosionDelay: main.explosionDelay },
       "main",
-      1.0,
       () => {
         stateRef.current = FWState.MAIN_EXPLODE;
         addTimer(() => {
-          stateRef.current = FWState.MAIN_TEXT;
-          activeTextRef.current = main.text;
-          textKindRef.current = "main";
-          // Setelah Main text hold selesai → SCHEDULE SEMUA WISHES SEKALIGUS (overlap)
-          addTimer(() => {
-            scheduleAllWishesTimeline(cw, ch);
-          }, main.displayDuration);
+          if (stateRef.current < FWState.MAIN_TEXT) stateRef.current = FWState.MAIN_TEXT;
+          // tampilkan label "TAP-TAP LAYAR UNTUK WISHES"
+          setHintOn(true);
+          addTimer(() => scheduleAllWishesTimeline(cw, ch), main.displayDuration);
         }, (main.explosionDelay || 0) + 450);
       },
     );
   };
 
-  // 📅 TIMELINE SCHEDULER: schedule launch wish[0] at t=0, wish[1] at t=interval, wish[2] t=2*interval dst → SETELAH final launch date → start final firework.
   const scheduleAllWishesTimeline = (cw: number, ch: number) => {
-    stateRef.current = FWState.WISH_LAUNCH;
+    if (stateRef.current < FWState.WISH_LAUNCH) stateRef.current = FWState.WISH_LAUNCH;
     const wishCfg = resolvedCfg.wishes;
     const anim = wishCfg.animation;
     const N = wishes.length;
     if (N === 0) { startFinal(cw, ch); return; }
 
-    // Schedule EVERY wish at offset i * interval (OVERLAP! no await)
-    let lastWishLaunchOffset = 0;
+    let lastOffset = 0;
     for (let i = 0; i < N; i++) {
       const offset = i * Math.max(100, wishCfg.interval);
-      lastWishLaunchOffset = Math.max(lastWishLaunchOffset, offset);
-      const palette = PALETTE_WISH[i % PALETTE_WISH.length];
+      lastOffset = Math.max(lastOffset, offset);
+      const palette = PALETTE_WISH[paletteIdxRef.current++ % PALETTE_WISH.length];
       addTimer(() => {
         const item = wishes[i] as any;
         if (!item || !item.text) return;
-        // Wish explosion scale 0.92, sesuai kecepatan wish
-        launchOneFirework(
-          cw, ch, item, palette,
-          { launchDuration: anim.launchDuration, explosionDelay: anim.explosionDelay },
-          "wish",
-          0.92,
-          () => {
-            stateRef.current = stateRef.current < FWState.WISH_EXPLODE ? FWState.WISH_EXPLODE : stateRef.current;
-            addTimer(() => {
-              stateRef.current = stateRef.current < FWState.WISH_TEXT ? FWState.WISH_TEXT : stateRef.current;
-              activeTextRef.current = item.text;
-              textKindRef.current = "wish";
-            }, anim.explosionDelay + 220);
-          },
-        );
+        launchOneFirework(cw, ch, item, palette, anim, "wish", () => {
+          if (stateRef.current < FWState.WISH_EXPLODE) stateRef.current = FWState.WISH_EXPLODE;
+        });
       }, offset);
     }
 
-    // Schedule FINAL firework: ketika wish TERAKHIR sudah punya waktu selesai total (launch + explode + formation + hold + fade + safety 300)
-    const finalAfter =
-      lastWishLaunchOffset +
-      (anim.launchDuration + anim.explosionDelay + anim.textFormationDuration + anim.textHoldDuration + anim.fadeDuration) +
-      320;
     if (finalScheduledRef.current) return;
     finalScheduledRef.current = true;
-    addTimer(() => { startFinal(cw, ch); }, finalAfter);
+    const finalAfter =
+      lastOffset +
+      anim.launchDuration + anim.explosionDelay + anim.textFormationDuration + anim.textHoldDuration + anim.fadeDuration +
+      320;
+    addTimer(() => startFinal(cw, ch), finalAfter);
   };
 
-  // 🎆 FINAL FIREWORK (lebih besar, posisi tengah, 2 sekunder kiri kanan) → transition out
   const startFinal = (cw: number, ch: number) => {
+    if (stateRef.current >= FWState.FINAL_LAUNCH) return;
     stateRef.current = FWState.FINAL_LAUNCH;
     const ending = resolvedCfg.ending;
-    const palette = ["#FFD86B", "#FF8AA8", "#FFE9A8", "#A084FF", "#FFFFFF"];
-    const duration = typeof ending.launchDuration === "number" ? ending.launchDuration : 1900;
     launchOneFirework(
       cw, ch,
-      { text: ending.text, position: { x: 0.50, y: 0.29 }, launch: { x: 0.50, y: 0.95 } },
-      palette,
-      { launchDuration: duration, explosionDelay: 400 },
+      { text: ending.text, position: { x: 0.5, y: 0.33 }, launch: { x: 0.5, y: 0.97 } },
+      ["#FFD86B", "#FF8AA8"],
+      {
+        launchDuration: typeof ending.launchDuration === "number" ? ending.launchDuration : 1900,
+        textFormationDuration: 1100,
+        textHoldDuration: Math.max(1200, (ending.duration || 3000) - 600),
+        fadeDuration: 900,
+      },
       "final",
-      1.4,
       () => {
         stateRef.current = FWState.FINAL_EXPLODE;
-        addTimer(() => {
-          explodeAt(cw * 0.24, ch * 0.40, PALETTE_WISH[1].slice(0, 3), 0.72, cw, ch, "", "final");
-        }, 220);
-        addTimer(() => {
-          explodeAt(cw * 0.76, ch * 0.37, PALETTE_WISH[2].slice(0, 3), 0.72, cw, ch, "", "final");
-        }, 400);
+        addTimer(() => spawnStreaks(cw * 0.24, ch * 0.42, 70, cw * 0.2, PALETTE_WISH[2], 1800), 220);
+        addTimer(() => spawnStreaks(cw * 0.76, ch * 0.4, 70, cw * 0.2, PALETTE_WISH[4], 1800), 400);
         addTimer(() => {
           stateRef.current = FWState.FINAL_TEXT;
-          activeTextRef.current = ending.text;
-          textKindRef.current = "final";
-          addTimer(() => { beginTransitionOut(cw, ch); }, ending.duration || 3000);
+          addTimer(() => beginTransitionOut(), ending.duration || 3000);
         }, 640);
       },
     );
   };
 
-  const explodeAt = (
-    cx: number,
-    cy: number,
-    palette: string[],
-    scale: number,
-    cw: number,
-    ch: number,
-    textForForm: string,
-    kind: "main" | "wish" | "final",
-  ) => {
-    // ✨✨ STRATEGI BARU: LEDAKAN SELALU JELAS TERLIHAT, SEBAGIAN KECIL MEMBENTUK TEXT
-    // Step 1: SPAWN BURST LEDAKAN BESAR (100% explode particle, TIDAK ADA textForm)
-    //         → User SELALU melihat BOOM pixel terlebih dahulu.
-    // Step 2: Baru SEBAGIAN KECIL particle tambahan jadi textForm (ratio 32%, dulu 55%)
-    // Step 3: Explode life DIPERPANJANG agar terlihat bersamaan dengan text yang terbentuk.
-    // Hasil: "ada ledakan jelas → sebagian pixel mengalir jadi huruf → ledakan sisa masih terlihat"
-
-    const dominantColor = palette[0];
-    const accentColor = palette[1] ?? dominantColor;
-    const pixSize =
-      kind === "final" ? 4 : kind === "main" ? 4 : kind === "wish" ? 3 : 3;
-    const explodeSizesPool: number[] = [2,2,3,3,3,3,4,4,4,5,6];
-    const sparklePool: number[] = [2,2,2,3,3,4];
-
-    // =========================================================
-    // 💥 BURST 1: LEDAKAN PERTAMA 100% EXPLODE (DIKURANGI AGAR TIDAK MENUUTPI TEXT!)
-    //            Warna HARMONY SAMA PALETTE TEXT (bukan random acak ribet)
-    // =========================================================
-    const burst1Count = Math.floor((reduced ? 80 : 125) * scale); // Dikurangi dari 180 → 125 (tidak menutupi text)
-    for (let i = 0; i < burst1Count; i++) {
-      const angle = (Math.PI * 2 * i) / burst1Count + (Math.random() - 0.5) * 0.38;
-      const speed = (0.16 + Math.random() * 0.68) * scale * (reduced ? 0.84 : 1);
-      // WARNA LEDAKAN HARMONY: 80% dominant/accent (SAMA DENGAN WARNA TEXT) 20% palette lain
-      const color = Math.random() < 0.82
-        ? (Math.random() < 0.74 ? dominantColor : accentColor)
-        : sampleColor(palette);
-      const p: Particle = {
-        x: cx,
-        y: cy,
-        vx: Math.cos(angle) * speed,
-        vy: Math.sin(angle) * speed,
-        life: 0,
-        maxLife: 2400 + Math.random() * 1800,
-        size: explodeSizesPool[Math.floor(Math.random() * explodeSizesPool.length)],
-        color,
-        kind: "explode",
-        alpha: 1,
-        gravity: 0.00018 + Math.random() * 0.00024,
-        drag: 0.988 - Math.random() * 0.008,
-        glow: 14 + Math.random() * 20 * scale,
-      };
-      spawnParticle(p);
-    }
-
-    // =========================================================
-    // 💥 BURST 2: SPARKLE EXTRA (DIKURANGI → HARMONY tidak mengganggu)
-    // =========================================================
-    const sparkleN = Math.floor((reduced ? 18 : 30) * scale); // 52 → 30 (kurangi kilatan berlebih)
-    for (let i = 0; i < sparkleN; i++) {
-      const angle = Math.random() * Math.PI * 2;
-      const speed = (0.07 + Math.random() * 0.38) * scale;
-      const color = Math.random() < 0.72 ? dominantColor : accentColor;
-      spawnParticle({
-        x: cx,
-        y: cy,
-        vx: Math.cos(angle) * speed,
-        vy: Math.sin(angle) * speed,
-        life: 0,
-        maxLife: 900 + Math.random() * 1400,
-        size: sparklePool[Math.floor(Math.random() * sparklePool.length)],
-        color,
-        kind: "sparkle",
-        alpha: 1,
-        gravity: 0.00005,
-        drag: 0.985,
-        glow: 10 + Math.random() * 15,
-      });
-    }
-
-    // =========================================================
-    // 📝 TEXTFORM RATIO NAIK 32% → 48%: LEBIH BANYAK PIXEL → HURUF LEBIH PADAT JELAS!
-    //    Warna 100% DOMINAN + ACCENT TEXT (BUKAN campur random palette)
-    // =========================================================
-    if (textForForm.length > 0) {
-      const candidateCount = Math.floor((reduced ? 90 : 160) * scale); // CANDIDATE NAIK (lebih tersedia untuk text)
-      for (let i = 0; i < candidateCount; i++) {
-        const angle = (Math.PI * 2 * i) / candidateCount + (Math.random() - 0.5) * 0.28;
-        const speed = (0.10 + Math.random() * 0.52) * scale * (reduced ? 0.82 : 1);
-        const isForm = Math.random() < 0.48; // RATIO NAIK: 48% jadi text (dulu 32%)
-        const color = isForm
-          ? (Math.random() < 0.86 ? dominantColor : accentColor) // 100% warna TEXT, bukan campur!
-          : (Math.random() < 0.82 ? (Math.random() < 0.74 ? dominantColor : accentColor) : sampleColor(palette));
-        const finalSize: number = isForm
-          ? pixSize + (Math.random() < 0.28 ? 1 : 0)
-          : explodeSizesPool[Math.floor(Math.random() * explodeSizesPool.length)];
-        const p: Particle = {
-          x: cx,
-          y: cy,
-          vx: Math.cos(angle) * speed,
-          vy: Math.sin(angle) * speed,
-          life: 0,
-          maxLife: isForm
-            ? 4700 + Math.random() * 1600
-            : 2300 + Math.random() * 1700,
-          size: finalSize,
-          color,
-          kind: isForm ? "textForm" : "explode",
-          alpha: 1,
-          gravity: isForm ? 0 : 0.00014 + Math.random() * 0.00020,
-          drag: isForm ? 0.986 : 0.988 - Math.random() * 0.008,
-          glow: isForm ? pixSize * 6 : 12 + Math.random() * 18 * scale,
-        };
-        spawnParticle(p);
-      }
-    }
-    if (textForForm.length > 0) {
-      // ✅ FONT SIZE 1.5x LEBIH BESAR (clamp + persen of screen width)
-      const fontSize =
-        kind === "final"
-          ? Math.max(24, Math.min(58, cw * 0.115))
-          : kind === "main"
-          ? Math.max(28, Math.min(62, cw * 0.128))
-          : Math.max(22, Math.min(50, cw * 0.098));
-      // ✅ PUSAT TEXT = (cx, cy) + sampleTextPoints SEKARANG ADA OUTLINE INFO (pts.length NAIK 5x)
-      const ptsRaw = sampleTextPoints(textForForm, fontSize, 0, cw, ch, cx, cy);
-      // Pisahkan pts jadi CORE TEXT (0 - ptsBaseCount) dan OUTLINE TEXT (ptsBaseCount - akhir)
-      // Outline nanti spawn particle WARNA PUTIH agar text ADA BINGKAI PUTIH 1 PIXEL = JELAS TERBACA!
-      const pts = ptsRaw;
-      // Hitung ratio: outline = 4neighbors + 1core → 1/5 = core, 4/5 = outline. Tapi ptsBaseCount tidak disimpan kembali,
-      // Workaround: Mark particle TEXT OUTLINE jika index > pts.length * 0.2 (bagian terakhir = neighbor yang ditambahkan tadi)
-      if (pts.length > 0) {
-        const existingCandidates = particlesRef.current.filter(
-          (p) => p.kind === "textForm" && p.tx === undefined && p.life < 200,
-        );
-        const assignTargetsTo = (list: Particle[]) => {
-          list.forEach((p, i) => {
-            const t = pts[i % pts.length];
-            p.tx = t.x;
-            p.ty = t.y;
-            // ✅ PUTIHKAN PARTICLE JIKA TERMASUK OUTLINE (index >= 20% akhir pts)
-            const isOutlineIdx = i >= Math.floor(list.length * 0.20);
-            if (isOutlineIdx) {
-              p.color = "#FFFFFF"; // BINGKAI PUTIH 1 PIXEL OTOMATIS!
-              p.glow = pixSize * 5.2;
-            }
-            p.startX = p.x;
-            p.startY = p.y;
-            p.tweenT = 0;
-            p.tweenDur = 700 + Math.random() * 480;
-          });
-        };
-        assignTargetsTo(existingCandidates.slice(0, pts.length));
-        const assigned = Math.min(existingCandidates.length, pts.length);
-        const remaining = pts.length - assigned;
-        if (remaining > 0) {
-          // Workaround outline ratio: 1 core + 4neighbors = 5 total → 20% pertama = COLORED CORE, 80% terakhir = PUTIH OUTLINE
-          const coreThreshold = Math.max(1, Math.floor(pts.length * 0.20));
-          for (let k = assigned; k < pts.length; k++) {
-            const t = pts[k];
-            const angle = Math.random() * Math.PI * 2;
-            const speed = 0.11 + Math.random() * 0.48;
-            const sx = cx + (Math.random() - 0.5) * 10;
-            const sy = cy + (Math.random() - 0.5) * 10;
-            // ✅ OUTLINE 80% TERAKHIR = WARNA PUTIH! (bingkai pixel biar text jelas terbaca walau explode di belakang)
-            const isOutlineK = k >= coreThreshold;
-            const textColor: string = isOutlineK ? "#FFFFFF" : (Math.random() < 0.88 ? dominantColor : accentColor);
-            const textSize: number = isOutlineK ? Math.max(2, pixSize - 1) : (pixSize + (Math.random() < 0.25 ? 1 : 0));
-            spawnParticle({
-              x: sx,
-              y: sy,
-              vx: Math.cos(angle) * speed,
-              vy: Math.sin(angle) * speed,
-              life: 0,
-              maxLife: 4700 + Math.random() * 1500,
-              size: textSize,
-              color: textColor,
-              kind: "textForm",
-              alpha: 1,
-              gravity: 0,
-              drag: 0.986,
-              glow: isOutlineK ? pixSize * 4.6 : pixSize * 6,
-              tx: t.x,
-              ty: t.y,
-              startX: sx,
-              startY: sy,
-              tweenT: 0,
-              tweenDur: 720 + Math.random() * 520,
-            });
-          }
-        }
-      }
-    }
-  };
-
-  const beginTransitionOut = (_cw: number, _ch: number) => {
+  const beginTransitionOut = () => {
     if (stateRef.current === FWState.TRANSITION_OUT || stateRef.current === FWState.DONE) return;
     stateRef.current = FWState.TRANSITION_OUT;
     transitionOutStartRef.current = performance.now();
+    setHintOn(false);
     addTimer(() => {
       stateRef.current = FWState.DONE;
       if (!doneTriggeredRef.current) {
@@ -781,14 +663,15 @@ export default function FireworkScene() {
     }, 1100);
   };
 
-  // Main activate/deactivate + state machine init
+  // =====================================================================
+  // MAIN EFFECT: canvas + render loop
+  // =====================================================================
   useEffect(() => {
     if (!active) return;
     resetScene();
     const canvas = canvasRef.current;
     const container = containerRef.current;
     if (!canvas || !container) return;
-
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
@@ -811,227 +694,159 @@ export default function FireworkScene() {
     const ro = new ResizeObserver(resize);
     ro.observe(container);
 
-    // Start music tryAutoStartScene2 (moved from BirthdayScene)
     if (!musicStartedRef.current) {
       musicStartedRef.current = true;
-      // Delay slightly so canvas starts drawing + cinematic timing with first rocket launch
       addTimer(() => { void tryAutoStartScene2(); }, 650);
     }
 
     if (!startedRef.current) {
       startedRef.current = true;
-      // Begin state machine: main birthday after small delay
       addTimer(() => startMainBirthday(cw, ch), 450);
     }
 
-    // Animation loop
     let last = performance.now();
     const loop = (now: number) => {
       const dt = Math.min(48, now - last);
       last = now;
-
-      // Clear
       ctx.clearRect(0, 0, cw, ch);
 
-      // Draw stars (slow moving background) — SQUARE PIXEL FILLRECT (matching font pixel!)
+      // ---- bintang latar (kotak kecil, berkedip halus)
       const stars = starsRef.current;
       for (let i = 0; i < stars.length; i++) {
         const s = stars[i];
         s.x += s.vx * dt;
         s.y += s.vy * dt;
         s.phase += 0.002 * dt;
-        if (s.y < -5) {
-          s.y = ch + 5;
-          s.x = Math.random() * cw;
-        }
-        if (s.x < -5) s.x = cw + 5;
-        else if (s.x > cw + 5) s.x = -5;
-        const flick = 0.6 + 0.4 * Math.sin(s.phase);
-        ctx.globalAlpha = s.alpha * flick;
+        if (s.y < -5) { s.y = ch + 5; s.x = Math.random() * cw; }
+        if (s.x < -5) s.x = cw + 5; else if (s.x > cw + 5) s.x = -5;
+        ctx.globalAlpha = s.alpha * (0.65 + 0.35 * Math.sin(s.phase));
         ctx.fillStyle = "#ffffff";
-        const starSz = Math.max(1, s.size);
-        ctx.fillRect(s.x - starSz / 2, s.y - starSz / 2, starSz, starSz);
+        ctx.fillRect(Math.round(s.x), Math.round(s.y), s.size, s.size);
       }
       ctx.globalAlpha = 1;
 
-      // Rockets update + draw — ROCKET CORE = SQUARE (matching pixel art style)
+      // ---- roket: garis tipis memanjang + kepala kecil bercahaya
       const rockets = rocketsRef.current;
       for (let i = rockets.length - 1; i >= 0; i--) {
         const r = rockets[i];
         r.t = Math.min(1, (now - r.startAt) / r.duration);
-        const eased = 1 - Math.pow(1 - r.t, 2.6);
+        const eased = 1 - Math.pow(1 - r.t, 2.2);
+        r.x = r.startX + (r.targetX - r.startX) * eased;
         r.y = r.startY + (r.targetY - r.startY) * eased;
-        // ✅ Gerak X juga (startX → targetX) untuk roket wish yang menuju posisi kiri/kanan!
-        const rAny = r as any;
-        const rStartX = typeof rAny.startX === "number" ? rAny.startX : r.x;
-        const rTargetX = typeof rAny.targetX === "number" ? rAny.targetX : r.x;
-        r.x = rStartX + (rTargetX - rStartX) * eased;
-        r.trailTimer += dt;
-        const spawnEvery = reduced ? 16 : 9;
-        if (r.trailTimer >= spawnEvery) {
-          r.trailTimer = 0;
-          spawnParticle({
-            x: r.x + (Math.random() - 0.5) * 1.5,
-            y: r.y + r.size * 1.2,
-            vx: (Math.random() - 0.5) * 0.05,
-            vy: 0.05 + Math.random() * 0.12,
-            life: 0,
-            maxLife: 500 + Math.random() * 400,
-            size: r.size * 0.6 + Math.random() * 0.9,
-            color: Math.random() < 0.5 ? r.color : "#FFFFFF",
-            kind: "rocketTrail",
-            alpha: 1,
-            gravity: 0.0,
-            drag: 0.98,
-            glow: 9 + Math.random() * 7,
-          });
-          if (Math.random() < 0.35) {
-            spawnParticle({
-              x: r.x + (Math.random() - 0.5) * 3,
-              y: r.y + r.size * 2,
-              vx: (Math.random() - 0.5) * 0.03,
-              vy: 0.03 + Math.random() * 0.05,
-              life: 0,
-              maxLife: 800 + Math.random() * 700,
-              size: 2.1 + Math.random() * 2.4,
-              color: "rgba(200,200,220,0.5)",
-              kind: "smoke",
-              alpha: 0.4,
-              gravity: 0,
-              drag: 0.995,
-              glow: 0,
-            });
-          }
+
+        const dx = r.x - r.startX;
+        const dy = r.y - r.startY;
+        const dist = Math.hypot(dx, dy);
+        if (dist > 1) {
+          const len = Math.min(dist, 170);
+          const ux = dx / dist;
+          const uy = dy / dist;
+          const tx = r.x - ux * len;
+          const ty = r.y - uy * len;
+          const g = ctx.createLinearGradient(tx, ty, r.x, r.y);
+          g.addColorStop(0, r.color + "00");
+          g.addColorStop(1, r.color + "ee");
+          ctx.globalCompositeOperation = "lighter";
+          ctx.strokeStyle = g;
+          ctx.lineWidth = 1.6;
+          ctx.beginPath();
+          ctx.moveTo(tx, ty);
+          ctx.lineTo(r.x, r.y);
+          ctx.stroke();
         }
-        // Rocket glow aura (lighter composite)
-        const grad = ctx.createRadialGradient(r.x, r.y, 0, r.x, r.y, r.size * 4.8);
-        grad.addColorStop(0, "rgba(255,255,255,1)");
-        grad.addColorStop(0.35, r.color + "cc");
-        grad.addColorStop(1, r.color + "00");
-        ctx.globalCompositeOperation = "lighter";
-        ctx.fillStyle = grad;
+        const hg = ctx.createRadialGradient(r.x, r.y, 0, r.x, r.y, r.size * 3.6);
+        hg.addColorStop(0, "rgba(255,255,255,0.95)");
+        hg.addColorStop(0.4, r.color + "aa");
+        hg.addColorStop(1, r.color + "00");
+        ctx.fillStyle = hg;
         ctx.beginPath();
-        ctx.arc(r.x, r.y, r.size * 4.8, 0, Math.PI * 2);
+        ctx.arc(r.x, r.y, r.size * 3.6, 0, Math.PI * 2);
         ctx.fill();
         ctx.globalCompositeOperation = "source-over";
-        // ✅ Rocket CORE = SQUARE PIXEL (bukan lingkaran! Matching pixel art font & particles)
-        ctx.fillStyle = "#FFFFFF";
-        const coreSz = Math.max(2, Math.round(r.size * 1.15));
-        ctx.fillRect(r.x - coreSz / 2, r.y - coreSz / 2, coreSz, coreSz);
 
-        if (r.t >= 1) {
-          rockets.splice(i, 1);
-        }
+        if (r.t >= 1) rockets.splice(i, 1);
       }
 
-      // Particles update + draw — SINGLE PASS, ALL PIXEL SQUARE, TRUE TWEEN CINEMATIC
+      // ---- partikel
       const arr = particlesRef.current;
-      const nowMs = now;
-
+      const dragF = dt / 16.67;
       ctx.globalCompositeOperation = "lighter";
       for (let i = arr.length - 1; i >= 0; i--) {
         const p = arr[i];
         p.life += dt;
-        const aliveFrac = p.life / p.maxLife;
-        if (aliveFrac >= 1) { arr.splice(i, 1); continue; }
+        if (p.life < 0) continue; // masih delay
+        if (p.life >= p.maxLife) {
+          arr[i] = arr[arr.length - 1];
+          arr.pop();
+          continue;
+        }
 
-        const isText = p.kind === "textForm";
+        if (p.kind === "textForm") {
+          const dur = p.tweenDur || 900;
+          const f = Math.min(1, p.life / dur);
+          const e = 1 - Math.pow(1 - f, 3);
+          p.x = p.startX! + (p.tx! - p.startX!) * e;
+          p.y = p.startY! + (p.ty! - p.startY!) * e;
 
-        // ✨✨ TEXTFORM TWEEN BERSAMAAN DENGAN LEDAKAN: TIDAK ADA DELAY!
-        // Saat ledakan terjadi (T=0) → TEXT MULAI menyusun DARI SAAT YANG SAMA!
-        // Ledakan particle (explode) BERHAMBUR keluar BERSAMAAN pixel text MENGALIR MENYUSUN huruf.
-        if (isText && p.tx !== undefined && p.ty !== undefined) {
-          const TWEEN_DELAY = 0; // ✅ BERSAMAAN: 0ms delay, mulai dari T=0 ledakan!
-          const effT = Math.max(0, p.life - TWEEN_DELAY);
-          p.tweenT = effT;
-          const twDur = p.tweenDur || 780;
-          const twFrac = Math.min(1, effT / twDur);
-          if (twFrac < 1) {
-            // ✨ MULAI BERSAMAAN: startX/Y SET SEKARANG JUGA = area ledakan cx,cy (TIDAK WAIT 150ms!)
-            if (p.startX === undefined) { p.startX = p.x; p.startY = p.y; }
-            const ease = 1 - Math.pow(1 - twFrac, 3);
-            const sX = p.startX!;
-            const sY = p.startY!;
-            p.x = sX + (p.tx! - sX) * ease;
-            p.y = sY + (p.ty! - sY) * ease;
-            p.vx = 0;
-            p.vy = 0;
-          } else {
-            p.x = p.tx;
-            p.y = p.ty;
-            p.vx = 0;
-            p.vy = 0;
+          let a = Math.min(1, p.life / 160);
+          if (p.life > (p.fadeStart || 0)) {
+            a *= Math.max(0, 1 - (p.life - p.fadeStart!) / (p.fadeDur || 900));
           }
-        } else {
-          // Non-text particle: normal physics (explode/sparkle/rocketTrail/smoke)
-          p.vx *= p.drag;
-          p.vy = p.vy * p.drag + p.gravity * dt;
-          p.x += p.vx * dt;
-          p.y += p.vy * dt;
+          // kedip LED halus setelah huruf terbentuk
+          if (f >= 1) a *= 0.88 + 0.12 * Math.sin(now * 0.008 + i * 0.7);
+          if (a <= 0.01) continue;
+
+          ctx.globalAlpha = a * 0.16;
+          ctx.fillStyle = p.color;
+          ctx.fillRect(p.x - 2.5, p.y - 2.5, 5, 5); // halo
+          ctx.globalAlpha = a;
+          ctx.fillRect(Math.round(p.x - 1), Math.round(p.y - 1), 2, 2);
+          continue;
         }
 
-        // Alpha fade: EXPLODE FADE LEBIH LAMBAT agar BERSAMAAN dengan text yang masih terbentuk
-        // Text fade di 92% (bertahan lebih dulu), Explode fade di 85% (mulai memudar perlahan saat text mulai full)
-        let alpha = 1;
-        const fadeEndFrac = isText ? 0.92 : 0.85;
-        const fadeInFrac = isText ? 0.02 : 0.08;
-        if (aliveFrac < fadeInFrac) alpha = aliveFrac / fadeInFrac;
-        else if (aliveFrac > fadeEndFrac) alpha = Math.max(0, 1 - (aliveFrac - fadeEndFrac) / (1 - fadeEndFrac));
-        if (p.kind === "smoke") alpha *= 0.4;
-        // Micro flicker LED natural: ±4% opacity Saja (size TETAP SAMA!)
-        const flickP =
-          isText
-            ? 0.965 + 0.035 * Math.sin(nowMs * 0.011 + i * 0.29)
-            : 1;
-        alpha *= flickP;
-        p.alpha = alpha;
+        // fisika (streak / blob / sparkle)
+        const d = Math.pow(p.drag, dragF);
+        p.vx *= d;
+        p.vy = p.vy * d + p.gravity * dt;
+        p.x += p.vx * dt;
+        p.y += p.vy * dt;
 
-        // Glow aura LED (all particles — non glow=0 soal smoke)
-        if (p.glow > 0 && alpha > 0.03) {
-          const glowRadius = p.size * (isText ? 3.3 : 4.7);
-          const g = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, glowRadius);
-          g.addColorStop(0, p.color);
-          g.addColorStop(0.46, p.color + "4f");
-          g.addColorStop(1, p.color + "00");
-          ctx.globalAlpha = alpha * (isText ? 0.66 : 0.9);
-          ctx.fillStyle = g;
+        const frac = p.life / p.maxLife;
+        const fadeFrom = p.kind === "streak" ? 0.45 : p.kind === "blob" ? 0.4 : 0.55;
+        let a = 1;
+        if (frac < 0.05) a = frac / 0.05;
+        else if (frac > fadeFrom) a = Math.max(0, 1 - (frac - fadeFrom) / (1 - fadeFrom));
+
+        if (p.kind === "streak") {
+          ctx.globalAlpha = a * 0.95;
+          ctx.strokeStyle = p.color;
+          ctx.lineWidth = 1;
           ctx.beginPath();
-          ctx.arc(p.x, p.y, glowRadius, 0, Math.PI * 2);
-          ctx.fill();
+          ctx.moveTo(p.x - p.vx * 55, p.y - p.vy * 55);
+          ctx.lineTo(p.x, p.y);
+          ctx.stroke();
+        } else if (p.kind === "blob") {
+          ctx.globalAlpha = a * 0.2;
+          ctx.fillStyle = p.color;
+          ctx.fillRect(p.x - 3.5, p.y - 3.5, 7, 7);
+          ctx.globalAlpha = a;
+          const sz = Math.round(p.size);
+          ctx.fillRect(Math.round(p.x - sz / 2), Math.round(p.y - sz / 2), sz, sz);
+        } else {
+          ctx.globalAlpha = a;
+          ctx.fillStyle = p.color;
+          ctx.fillRect(Math.round(p.x - 1), Math.round(p.y - 1), 2, 2);
         }
-        // ✅ ALL PARTICLES = SQUARE fillRect (100% pixel art style, matching font pixel!)
-        // ✅✨ PIXEL SQUARE INTEGER SIZE: sz dibulatkan SELALU ke integer kelipatan!
-        // Ini membuat semua LED pixel fireworks TERLIHAT NATURAL pixel board, bukan float blur.
-        ctx.globalAlpha = alpha;
-        ctx.fillStyle = p.color;
-        const sz = Math.max(1, Math.round(p.size));
-        const hsz = (sz % 2 === 0) ? sz / 2 : sz / 2;
-        ctx.fillRect(Math.round(p.x - hsz), Math.round(p.y - hsz), sz, sz);
       }
       ctx.globalAlpha = 1;
       ctx.globalCompositeOperation = "source-over";
 
-      // ✅ DOM TEXT OVERLAY = MAX 0 OPACITY (100% DIHAPUS! Pixel font = 100% object utama)
-      if (activeTextRef.current.length > 0) {
-        const targetOpacity = 0; // HARD ZERO — teks DOM TIDAK PERNAH MUNCUL!
-        const targetScale = 1;
-        textOpacityRef.current += (targetOpacity - textOpacityRef.current) * Math.min(1, dt / 220);
-        textScaleRef.current += (targetScale - textScaleRef.current) * Math.min(1, dt / 500);
-      } else {
-        textOpacityRef.current += (0 - textOpacityRef.current) * Math.min(1, dt / 380);
-        textScaleRef.current += (0.85 - textScaleRef.current) * Math.min(1, dt / 380);
-      }
-
-      // Transition out: dim scene
-      if (stateRef.current === FWState.TRANSITION_OUT) {
+      // ---- transisi keluar
+      if (stateRef.current === FWState.TRANSITION_OUT || stateRef.current === FWState.DONE) {
         const t = Math.min(1, (now - transitionOutStartRef.current) / 1100);
-        sceneFadeRef.current = t;
         ctx.fillStyle = `rgba(5,2,12,${0.55 * t})`;
         ctx.fillRect(0, 0, cw, ch);
       }
-
-      // Force occasional rerender to update DOM text overlay opacity (for smoothness)
-      if ((now | 0) % 4 === 0) forceRerender();
 
       rafRef.current = requestAnimationFrame(loop);
     };
@@ -1042,89 +857,107 @@ export default function FireworkScene() {
       rafRef.current = null;
       ro.disconnect();
       clearTimers();
+      startedRef.current = false; // agar scene bisa diputar ulang
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [active]);
 
-  // Skip / fast-forward: tap anywhere during scene -> jump to transition out
-  const handleSkip = () => {
-    if (stateRef.current < FWState.TRANSITION_OUT && !doneTriggeredRef.current) {
-      const canvas = canvasRef.current;
-      const container = containerRef.current;
-      let cw = 0, ch = 0;
-      if (container) {
-        const rect = container.getBoundingClientRect();
-        cw = rect.width; ch = rect.height;
-      }
-      beginTransitionOut(cw, ch);
-    }
+  // TAP = tembakkan wish baru tepat di titik yang disentuh
+  const handleTap = (e: RPointerEvent<HTMLElement>) => {
+    if (!active) return;
+    const st = stateRef.current;
+    if (st < FWState.MAIN_TEXT || st >= FWState.FINAL_LAUNCH) return;
+    if (!wishes.length) return;
+    const now = performance.now();
+    if (now - lastTapRef.current < 220) return;
+    lastTapRef.current = now;
+
+    const container = containerRef.current;
+    if (!container) return;
+    const rect = container.getBoundingClientRect();
+    const cw = rect.width;
+    const ch = rect.height;
+    const fx = (e.clientX - rect.left) / cw;
+    const fy = (e.clientY - rect.top) / ch;
+
+    const item = wishes[tapIdxRef.current % wishes.length] as any;
+    tapIdxRef.current++;
+    const palette = PALETTE_WISH[paletteIdxRef.current++ % PALETTE_WISH.length];
+    launchOneFirework(
+      cw, ch,
+      {
+        text: item.text,
+        position: { x: fx, y: Math.min(0.78, Math.max(0.22, fy)) },
+        launch: { x: 0.5 + (fx - 0.5) * 0.4, y: 0.97 },
+      },
+      palette,
+      resolvedCfg.wishes.animation,
+      "wish",
+    );
   };
 
-  const titleStyle: React.CSSProperties =
-    textKindRef.current === "final"
-      ? { fontSize: "clamp(1.5rem, 7.2vw, 2.8rem)", letterSpacing: "0.04em" }
-      : textKindRef.current === "main"
-      ? { fontSize: "clamp(1.8rem, 8vw, 3rem)", letterSpacing: "0.06em" }
-      : { fontSize: "clamp(1rem, 4.6vw, 1.45rem)", letterSpacing: "0.02em", lineHeight: 1.25 };
-  void titleStyle; // preserved for future, currently unused since DOM overlay removed.
+  const handleSkip = (e: RPointerEvent<HTMLButtonElement>) => {
+    e.stopPropagation();
+    if (stateRef.current < FWState.TRANSITION_OUT && !doneTriggeredRef.current) beginTransitionOut();
+  };
 
   return (
     <section
       className={`scene-layer ${active ? "scene-active" : "scene-hidden"}`}
       aria-hidden={!active}
       ref={containerRef}
-      onClick={active ? handleSkip : undefined}
-      onTouchStart={active ? handleSkip : undefined}
-      style={{ padding: 0, cursor: active ? "pointer" : "default" }}
+      onPointerDown={active ? handleTap : undefined}
+      style={{ padding: 0, cursor: active ? "pointer" : "default", touchAction: "manipulation" }}
     >
       <canvas
         ref={canvasRef}
         className="absolute inset-0 w-full h-full select-none"
         aria-hidden
-        style={{
-          display: "block",
-          touchAction: "none",
-        }}
+        style={{ display: "block", touchAction: "none" }}
       />
 
-      {/* Scene fade overlay for transition out */}
+      {/* Label petunjuk seperti di video */}
       <div
-        className="absolute inset-0 pointer-events-none"
+        className="absolute left-0 right-0 text-center pointer-events-none select-none"
         style={{
-          background: "rgba(5,2,12,0)",
-          opacity: Math.min(1, sceneFadeRef.current * 0.8),
-          transition: "background 0.1s linear",
-          zIndex: 6,
+          top: "max(5.2rem, calc(env(safe-area-inset-top) + 3.6rem))",
+          fontSize: 11,
+          fontWeight: 700,
+          letterSpacing: "0.16em",
+          color: "rgba(150,185,255,0.85)",
+          textTransform: "uppercase",
+          opacity: active && hintOn ? 1 : 0,
+          transition: "opacity 0.8s ease",
+          zIndex: 7,
         }}
         aria-hidden
-      />
+      >
+        <span style={{ color: "#FF9A4A" }}>✦</span> TAP-TAP LAYAR UNTUK WISHES <span style={{ color: "#FF9A4A" }}>✦</span>
+      </div>
 
-      {/* Tiny hint first 4s */}
-      {active && stateRef.current < FWState.WISH_LAUNCH && (
-        <div
-          className="absolute left-0 right-0 text-center pointer-events-none select-none"
+      {/* Tombol lewati (kecil, tidak mengganggu) */}
+      {active && hintOn && (
+        <button
+          type="button"
+          onPointerDown={handleSkip}
           style={{
-            bottom: "max(1.2rem, calc(env(safe-area-inset-bottom) + 0.9rem))",
+            position: "absolute",
+            right: 14,
+            bottom: "max(1rem, calc(env(safe-area-inset-bottom) + 0.8rem))",
+            zIndex: 8,
             fontSize: 11,
             letterSpacing: "0.12em",
-            color: "rgba(255,240,210,0.4)",
             textTransform: "uppercase",
-            animation: "fadeOutHint 4s ease-out forwards",
+            color: "rgba(255,240,210,0.55)",
+            background: "transparent",
+            border: "1px solid rgba(255,240,210,0.25)",
+            borderRadius: 999,
+            padding: "6px 12px",
           }}
-          aria-hidden
         >
-          Tap anywhere to skip
-        </div>
+          Lanjut ›
+        </button>
       )}
-
-      <style>{`
-        @keyframes fadeOutHint {
-          0% { opacity: 0; }
-          25% { opacity: 0.7; }
-          70% { opacity: 0.5; }
-          100% { opacity: 0; }
-        }
-      `}</style>
 
       <div className="vignette" />
     </section>
