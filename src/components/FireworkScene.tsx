@@ -901,37 +901,26 @@ export default function FireworkScene() {
 
         const isText = p.kind === "textForm";
 
-        // ✅ TEXTFORM TRUE TWEEN CINEMATIC: startX/Y → tx/ty (bukan incremental lerp!)
-        // Transisi SMOOTH: partikel terbang explode beberapa frame (life<80ms), lalu start tween terkunci ke pixel huruf
-        // Visual: TERBANG TERLEBIH DAHULU → BERHENTI SEKARAT → MULAI MENYUSUN HURUF (smooth!)
+        // ✨✨ TEXTFORM TWEEN BERSAMAAN DENGAN LEDAKAN: TIDAK ADA DELAY!
+        // Saat ledakan terjadi (T=0) → TEXT MULAI menyusun DARI SAAT YANG SAMA!
+        // Ledakan particle (explode) BERHAMBUR keluar BERSAMAAN pixel text MENGALIR MENYUSUN huruf.
         if (isText && p.tx !== undefined && p.ty !== undefined) {
-          const TWEEN_DELAY = 70 + Math.random() * 80; // 70-150ms partikel "terbang acak" terlebih dahulu (explode feel)
+          const TWEEN_DELAY = 0; // ✅ BERSAMAAN: 0ms delay, mulai dari T=0 ledakan!
           const effT = Math.max(0, p.life - TWEEN_DELAY);
           p.tweenT = effT;
           const twDur = p.tweenDur || 780;
           const twFrac = Math.min(1, effT / twDur);
           if (twFrac < 1) {
-            // ✅ PHASE 1: Terbang acak sebentar (0-70/150ms) → velocity explode masih aktif (natural!)
-            if (p.life < TWEEN_DELAY) {
-              // Belum mulai tween = terbang sesuai velocity ledakan (fade gravity=0)
-              p.vx *= p.drag;
-              p.vy *= p.drag;
-              p.x += p.vx * dt;
-              p.y += p.vy * dt;
-            } else {
-              // ✅ PHASE 2: TRUE CINEMATIC TWEEN — easeOutCubic dari start posisi KE pixel huruf target (NO OVERSHOOT!)
-              const ease = 1 - Math.pow(1 - twFrac, 3);
-              if (p.startX === undefined) { p.startX = p.x; p.startY = p.y; }
-              const sX = p.startX!;
-              const sY = p.startY!;
-              p.x = sX + (p.tx! - sX) * ease;
-              p.y = sY + (p.ty! - sY) * ease;
-              // Zero velocity (pastikan tidak drift!)
-              p.vx = 0;
-              p.vy = 0;
-            }
+            // ✨ MULAI BERSAMAAN: startX/Y SET SEKARANG JUGA = area ledakan cx,cy (TIDAK WAIT 150ms!)
+            if (p.startX === undefined) { p.startX = p.x; p.startY = p.y; }
+            const ease = 1 - Math.pow(1 - twFrac, 3);
+            const sX = p.startX!;
+            const sY = p.startY!;
+            p.x = sX + (p.tx! - sX) * ease;
+            p.y = sY + (p.ty! - sY) * ease;
+            p.vx = 0;
+            p.vy = 0;
           } else {
-            // ✅ PHASE 3: LOCK PIXEL TOTAL di posisi huruf — selamanya, sampai fade out
             p.x = p.tx;
             p.y = p.ty;
             p.vx = 0;
@@ -945,10 +934,11 @@ export default function FireworkScene() {
           p.y += p.vy * dt;
         }
 
-        // Alpha fade (textForm bertahan lebih lama: 87% life baru fade, non-text = 78%)
+        // Alpha fade: EXPLODE FADE LEBIH LAMBAT agar BERSAMAAN dengan text yang masih terbentuk
+        // Text fade di 92% (bertahan lebih dulu), Explode fade di 85% (mulai memudar perlahan saat text mulai full)
         let alpha = 1;
-        const fadeEndFrac = isText ? 0.89 : 0.79;
-        const fadeInFrac = isText ? 0.05 : 0.12;
+        const fadeEndFrac = isText ? 0.92 : 0.85;
+        const fadeInFrac = isText ? 0.02 : 0.08;
         if (aliveFrac < fadeInFrac) alpha = aliveFrac / fadeInFrac;
         else if (aliveFrac > fadeEndFrac) alpha = Math.max(0, 1 - (aliveFrac - fadeEndFrac) / (1 - fadeEndFrac));
         if (p.kind === "smoke") alpha *= 0.4;
