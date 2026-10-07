@@ -100,8 +100,98 @@ export default function FireworkScene() {
   const startedRef = useRef(false);
   const musicStartedRef = useRef(false);
   const timersRef = useRef<number[]>([]);
+  const finalScheduledRef = useRef(false);
 
-  const wishes = useMemo(() => (fwCfg && fwCfg.wishes ? fwCfg.wishes.filter(Boolean) : []), []);
+  // ==========================================
+  // BACKWARD COMPAT: Firework Config Normalizer
+  // ==========================================
+  const resolvedCfg = useMemo(() => {
+    const raw = fwCfg && fwCfg.enabled ? fwCfg : null;
+    if (!raw) {
+      return {
+        enabled: false,
+        mainBirthday: { text: "", launchDuration: 1800, explosionDelay: 300, textFormationDuration: 1000, textHoldDuration: 2200, displayDuration: 2800 },
+        wishes: { interval: 1000, animation: { launchDuration: 720, explosionDelay: 260, textFormationDuration: 900, textHoldDuration: 1800, fadeDuration: 900 }, items: [] as any[] },
+        ending: { text: "", duration: 3000, launchDuration: 1900 },
+      };
+    }
+    const main = Object.assign(
+      { text: "HAPPY BIRTHDAY", launchDuration: 1800, explosionDelay: 300, textFormationDuration: 1000, textHoldDuration: 2200, displayDuration: 2800 },
+      raw.mainBirthday || {},
+    );
+    // Compute effective displayDuration if not explicit but formation + hold provided
+    if (main.displayDuration < 1500 && main.textFormationDuration > 0 && main.textHoldDuration > 0) {
+      main.displayDuration = (main.explosionDelay || 0) + main.textFormationDuration + main.textHoldDuration;
+    }
+    const ending = Object.assign({ text: "", duration: 3000, launchDuration: 1900 }, raw.ending || {});
+
+    // --- Wishes normalizer: support BOTH formats NEW (wishes:{interval, animation, items[]}) & OLD (wishes: string[]) ---
+    let interval = 1000;
+    let animWish = { launchDuration: 720, explosionDelay: 260, textFormationDuration: 900, textHoldDuration: 1800, fadeDuration: 900 };
+    let items: any[] = [];
+
+    const rawWishes: any = raw.wishes;
+    if (Array.isArray(rawWishes)) {
+      // FORMAT LAMA: wishes = string[] (atau any[] teks). Convert ke items.
+      const strings = rawWishes.map((s: any) => String(s || "")).filter(Boolean);
+      interval = typeof (raw as any).wishInterval === "number" ? (raw as any).wishInterval : interval;
+      const spread = [
+        { x: 0.50, y: 0.22 }, { x: 0.24, y: 0.40 }, { x: 0.76, y: 0.40 },
+        { x: 0.50, y: 0.58 }, { x: 0.22, y: 0.72 }, { x: 0.78, y: 0.72 },
+        { x: 0.50, y: 0.40 }, { x: 0.32, y: 0.58 }, { x: 0.68, y: 0.58 },
+      ];
+      items = strings.map((text: string, i: number) => ({
+        text,
+        position: spread[i % spread.length],
+        launch: { x: 0.50, y: 0.95 },
+      }));
+    } else if (rawWishes && typeof rawWishes === "object") {
+      // FORMAT BARU: wishes { interval, animation, items: [] }
+      if (typeof rawWishes.interval === "number") interval = Math.max(100, rawWishes.interval);
+      else if (typeof (raw as any).wishInterval === "number") interval = Math.max(100, (raw as any).wishInterval);
+      if (rawWishes.animation && typeof rawWishes.animation === "object") {
+        animWish = Object.assign({}, animWish, rawWishes.animation);
+      }
+      if (Array.isArray(rawWishes.items)) {
+        items = rawWishes.items
+          .map((it: any) => {
+            if (!it) return null;
+            const text = typeof it === "string" ? it : String(it.text || "");
+            if (!text) return null;
+            const pos = it.position || it.pos || null;
+            const posX = pos && typeof pos.x === "number" ? pos.x : 0.50;
+            const posY = pos && typeof pos.y === "number" ? pos.y : 0.40;
+            const lch = it.launch || it.from || null;
+            const lchX = lch && typeof lch.x === "number" ? lch.x : 0.50;
+            const lchY = lch && typeof lch.y === "number" ? lch.y : 0.95;
+            return { text, position: { x: posX, y: posY }, launch: { x: lchX, y: lchY } };
+          })
+          .filter(Boolean);
+      } else if (Array.isArray(rawWishes._legacyList) && rawWishes._legacyList.length > 0) {
+        // Fallback legacy list jika items kosong
+        const strings = rawWishes._legacyList.map(String).filter(Boolean);
+        const spread = [
+          { x: 0.50, y: 0.22 }, { x: 0.24, y: 0.40 }, { x: 0.76, y: 0.40 },
+          { x: 0.50, y: 0.58 }, { x: 0.22, y: 0.72 }, { x: 0.78, y: 0.72 },
+        ];
+        items = strings.map((text: string, i: number) => ({
+          text,
+          position: spread[i % spread.length],
+          launch: { x: 0.50, y: 0.95 },
+        }));
+        if (typeof rawWishes._legacyInterval === "number") interval = rawWishes._legacyInterval;
+      }
+    }
+
+    return {
+      enabled: true,
+      mainBirthday: main,
+      wishes: { interval, animation: animWish, items },
+      ending,
+    };
+  }, []);
+
+  const wishes = useMemo(() => resolvedCfg.wishes.items || [], [resolvedCfg]);
   const wishIdxRef = useRef(0);
 
   const reduced = typeof window !== "undefined"
@@ -166,11 +256,12 @@ export default function FireworkScene() {
     doneTriggeredRef.current = false;
     sceneFadeRef.current = 0;
     transitionOutStartRef.current = 0;
+    finalScheduledRef.current = false;
     clearTimers();
     forceRerender();
   };
 
-  // Text sampling: rasterize text -> target coords. CENTER = (centerX, centerY) = POSISI LEDAKAN cx/cy!
+  // ✅ Text sampling: safe area + padding dinamis + 2 lines BALANCE wrap + scale down if overflow + pixel bounding box hitung TERAKHIR
   const sampleTextPoints = (
     text: string,
     fontSize: number,
@@ -182,177 +273,277 @@ export default function FireworkScene() {
   ): { x: number; y: number }[] => {
     const off = document.createElement("canvas");
     const scale = 2;
-    off.width = cw * scale;
-    off.height = ch * scale;
+    off.width = Math.max(2, Math.ceil(cw * scale));
+    off.height = Math.max(2, Math.ceil(ch * scale));
     const octx = off.getContext("2d", { willReadFrequently: true });
     if (!octx) return [];
     octx.scale(scale, scale);
     octx.fillStyle = "#fff";
     octx.textAlign = "center";
     octx.textBaseline = "middle";
-    const fs = Math.min(fontSize, cw * 0.14);
-    // Break into 2 lines if too long (wish texts usually longer)
-    const words = text.split(" ");
+
+    // SAFE AREA = margin kiri/kanan/atas/bawah (pixel DINAMIS berdasar lebar layar)
+    const safePadX = Math.max(18, cw * 0.07);  // min 18px + 7% width
+    const safePadY = Math.max(22, ch * 0.08);  // min 22px + 8% height
+    // Safe bounds (canvas pixel yang BOLEH ditempati text pixel)
+    const safeL = safePadX;
+    const safeR = cw - safePadX;
+    const safeT = safePadY;
+    const safeB = ch - safePadY;
+    const safeW = safeR - safeL;
+    const safeH = safeB - safeT;
+
+    const words = text.split(/\s+/).filter(Boolean);
     let lines: string[] = [];
-    if (words.length > 3 && text.length > 22) {
-      const mid = Math.ceil(words.length / 2);
-      lines.push(words.slice(0, mid).join(" "), words.slice(mid).join(" "));
+    let fs = Math.max(10, Math.min(fontSize, cw * 0.145));
+
+    // 1) Cari line split BALANCE (paling seimbang width kedua line) — MAKSIMAL 2 BARIS
+    const fontStr = (size: number) => `900 ${size}px Inter, system-ui, -apple-system, Segoe UI, sans-serif`;
+    const measureWidth = (str: string, size: number) => {
+      octx.font = fontStr(size);
+      return octx.measureText(str).width;
+    };
+    // Pencarian split paling seimbang: total 1..n kata di line1, sisanya line2.
+    if (words.length <= 1 || text.length <= 16) {
+      lines = [text];
     } else {
-      lines.push(text);
+      let best: { i: number; diff: number } = { i: Math.ceil(words.length / 2), diff: Infinity };
+      for (let i = 1; i <= words.length - 1; i++) {
+        const a = words.slice(0, i).join(" ");
+        const b = words.slice(i).join(" ");
+        const wa = measureWidth(a, fs);
+        const wb = measureWidth(b, fs);
+        const diff = Math.abs(wa - wb);
+        if (diff < best.diff) best = { i, diff };
+      }
+      lines = [words.slice(0, best.i).join(" "), words.slice(best.i).join(" ")];
     }
-    const lh = fs * 1.18;
-    // PUSAT SELURUH BLOCK TEXT = centerX, centerY (cx/cy LEDAKAN! bukan tengah canvas)
-    const startY = centerY - ((lines.length - 1) * lh) / 2;
+
+    // 2) Auto SCALE DOWN fs jika total width/height melebihi SAFE BOUNDS.
+    //    Ukur lagi setelah split, loop kurangi fs sampai masuk safe.
+    const maxIter = 16;
+    for (let it = 0; it < maxIter; it++) {
+      const lh = fs * 1.22;
+      octx.font = fontStr(fs);
+      let maxLineW = 0;
+      for (const l of lines) maxLineW = Math.max(maxLineW, octx.measureText(l).width);
+      const totalH = lh * lines.length;
+      if (maxLineW <= safeW * 0.995 && totalH <= safeH * 0.995) break;
+      fs = Math.max(10, fs * 0.9);
+      if (fs <= 10) break;
+    }
+    // Tambahan: pixel size offset padding (anti crop pinggiran font saat raster)
+    const pixPadX = Math.max(3, Math.round(fs * 0.08));
+    const pixPadY = Math.max(3, Math.round(fs * 0.08));
+
+    // 3) Hitung BOUNDING BOX text (centerX, centerY) → geser centerX/Y jika keluar safe area.
+    const lh = fs * 1.22;
+    octx.font = fontStr(fs);
+    let maxLineW = 0;
+    for (const l of lines) maxLineW = Math.max(maxLineW, octx.measureText(l).width);
+    const totalW = maxLineW + pixPadX * 2;
+    const totalH = lh * lines.length + pixPadY * 2;
+
+    let targetCenterX = centerX;
+    let targetCenterY = centerY;
+    // Clamp box supaya FULLY WITHIN SAFE AREA
+    const halfW = totalW / 2;
+    const halfH = totalH / 2;
+    const boxL = targetCenterX - halfW;
+    const boxR = targetCenterX + halfW;
+    const boxT = targetCenterY - halfH;
+    const boxB = targetCenterY + halfH;
+    if (boxL < safeL) targetCenterX += (safeL - boxL);
+    if (boxR > safeR) targetCenterX -= (boxR - safeR);
+    if (boxT < safeT) targetCenterY += (safeT - boxT);
+    if (boxB > safeB) targetCenterY -= (boxB - safeB);
+
+    // 4) Draw text di offscreen. START Y = targetCenterY + center align lines
+    const startY = targetCenterY - ((lines.length - 1) * lh) / 2;
     lines.forEach((line, i) => {
-      const localFs =
-        line.length > 28 ? fs * 0.76 : line.length > 22 ? fs * 0.84 : line.length > 16 ? fs * 0.92 : fs;
-      // Pixel font feel: font-weight BLACK + Inter = solid crisp pixel shape
-      octx.font = `900 ${localFs}px Inter, system-ui, -apple-system, sans-serif`;
-      octx.fillText(line, centerX, startY + i * lh);
+      // Font: Inter BLACK 900 = pixel bentuk solid, tipis tidak akan hilang
+      octx.font = fontStr(fs);
+      octx.fillText(line, targetCenterX, startY + i * lh);
     });
+
+    // 5) Rasterize alpha → points. Step = 9px (renggang natural pixel art)
     const img = octx.getImageData(0, 0, off.width, off.height).data;
     const pts: { x: number; y: number }[] = [];
-    const step = Math.max(9, Math.floor(scale * 4.5)); // step 9px = renggang PIXEL ART NATURAL
+    const step = Math.max(9, Math.floor(scale * 4.5));
     for (let y = 0; y < off.height; y += step) {
       for (let x = 0; x < off.width; x += step) {
         const a = img[(y * off.width + x) * 4 + 3];
-        if (a > 180) {
-          pts.push({ x: Math.round(x / scale), y: Math.round(y / scale) });
+        if (a > 190) { // Alpha lebih ketat = shape crisp, tidak blur pinggir
+          const px = Math.round(x / scale);
+          const py = Math.round(y / scale);
+          // Filter HARD: hanya pixel di DALAM safe area yang diikutsertakan (anti keluar layar!)
+          if (px >= safeL && px <= safeR && py >= safeT && py <= safeB) {
+            pts.push({ x: px, y: py });
+          }
         }
       }
     }
     if (pts.length === 0) {
       for (let i = 0; i < targetCount; i++) {
-        pts.push({ x: centerX + (Math.random() - 0.5) * 120, y: centerY + (Math.random() - 0.5) * 50 });
+        pts.push({ x: targetCenterX + (Math.random() - 0.5) * 160, y: targetCenterY + (Math.random() - 0.5) * 60 });
       }
     }
     return pts;
   };
 
-  const startMainBirthday = (cw: number, ch: number) => {
-    stateRef.current = FWState.MAIN_LAUNCH;
-    const { mainBirthday } = fwCfg;
+  // ========================================================
+  // FIREWORK LAUNCHERS + TIMELINE OVERLAP SCHEDULER (1 sec)
+  // ========================================================
+  const launchOneFirework = (
+    cw: number,
+    ch: number,
+    payload: {
+      text: string;
+      position: { x: number; y: number };
+      launch: { x: number; y: number };
+    },
+    palette: string[],
+    animCfg: { launchDuration: number; explosionDelay: number },
+    kind: "main" | "wish" | "final",
+    scale: number,
+    onExploded?: () => void,
+  ) => {
+    // Launch start = launch.x * cw, launch.y * ch (default: tengah bawah = 0.5*cw, 0.95*ch)
+    const startX = cw * (typeof payload.launch.x === "number" ? payload.launch.x : 0.50);
+    const startY = ch * (typeof payload.launch.y === "number" ? payload.launch.y : 0.95) + 10;
+    // Explosion target position = position.x * cw, position.y * ch
+    const targetY = ch * (typeof payload.position.y === "number" ? payload.position.y : 0.30);
+    const targetX = cw * (typeof payload.position.x === "number" ? payload.position.x : 0.50);
+    // Rocket berjalan miring (startX,Y → targetX,targetY) karena beberapa wish posisi kiri/kanan bukan tengah
+    const duration = Math.max(450, animCfg.launchDuration || 720);
+    const palette0 = palette[0] || "#FFD07F";
     const rocket: Rocket = {
-      x: cw * 0.5 + (Math.random() - 0.5) * 20,
-      y: ch + 20,
-      startY: ch + 20,
-      targetY: ch * 0.30 + Math.random() * ch * 0.08,
-      vy: 0,
-      startAt: performance.now(),
-      duration: mainBirthday.launchDuration,
-      color: PALETTE_MAIN[0],
-      trailTimer: 0,
-      exploded: false,
-      size: 4.3,
-      t: 0,
-    };
-    rocketsRef.current.push(rocket);
-    addTimer(() => {
-      explodeAt(rocket.x, rocket.targetY, PALETTE_MAIN, 1.0, cw, ch, mainBirthday.text, "main");
-      stateRef.current = FWState.MAIN_EXPLODE;
-      addTimer(() => {
-        stateRef.current = FWState.MAIN_TEXT;
-        activeTextRef.current = mainBirthday.text;
-        textKindRef.current = "main";
-        addTimer(() => {
-          if (wishes.length > 0) {
-            startWish(cw, ch);
-          } else {
-            startFinal(cw, ch);
-          }
-        }, mainBirthday.displayDuration);
-      }, mainBirthday.explosionDelay + 450);
-    }, mainBirthday.launchDuration + 20);
-  };
-
-  const startWish = (cw: number, ch: number) => {
-    const idx = wishIdxRef.current;
-    if (idx >= wishes.length) {
-      startFinal(cw, ch);
-      return;
-    }
-    stateRef.current = FWState.WISH_LAUNCH;
-    const palette = PALETTE_WISH[idx % PALETTE_WISH.length];
-    const x = cw * (0.16 + Math.random() * 0.68);
-    const targetY = ch * (0.20 + Math.random() * 0.22);
-    const duration = 1500 + Math.random() * 400;
-    const rocket: Rocket = {
-      x,
-      y: ch + 20,
-      startY: ch + 20,
+      x: startX,
+      y: startY,
+      startY,
       targetY,
       vy: 0,
       startAt: performance.now(),
       duration,
-      color: palette[0],
+      color: palette0,
       trailTimer: 0,
       exploded: false,
-      size: 3.7,
+      size: kind === "final" ? 5.3 : kind === "main" ? 4.3 : 3.7,
       t: 0,
     };
+    (rocket as any).targetX = targetX; // reuse di draw loop nanti untuk lerp x juga (bukan cuma y!)
+    (rocket as any).startX = startX;
     rocketsRef.current.push(rocket);
     addTimer(() => {
-      explodeAt(x, targetY, palette, 0.9, cw, ch, wishes[idx], "wish");
-      stateRef.current = FWState.WISH_EXPLODE;
-      addTimer(() => {
-        stateRef.current = FWState.WISH_TEXT;
-        activeTextRef.current = wishes[idx];
-        textKindRef.current = "wish";
-        addTimer(() => {
-          textOpacityRef.current = 0;
-          textScaleRef.current = 0.85;
-          activeTextRef.current = "";
-          wishIdxRef.current = idx + 1;
-          addTimer(() => {
-            if (wishIdxRef.current >= wishes.length) {
-              startFinal(cw, ch);
-            } else {
-              startWish(cw, ch);
-            }
-          }, fwCfg.wishInterval || 2200);
-        }, 2100);
-      }, 420);
+      explodeAt(targetX, targetY, palette, scale, cw, ch, payload.text, kind);
+      if (onExploded) onExploded();
     }, duration + 20);
   };
 
+  // ✅ START MAIN BIRTHDAY (posisi tengah, launch dari tengah bawah) → setelah selesai displayDuration → schedule ALL wishes OVERLAP
+  const startMainBirthday = (cw: number, ch: number) => {
+    stateRef.current = FWState.MAIN_LAUNCH;
+    const main = resolvedCfg.mainBirthday;
+    launchOneFirework(
+      cw, ch,
+      {
+        text: main.text,
+        position: { x: 0.50, y: 0.24 },  // posisi ledakan: tengah atas
+        launch:   { x: 0.50, y: 0.95 },  // launch: TENGAH BAWAH (sesuai spec!)
+      },
+      PALETTE_MAIN,
+      { launchDuration: main.launchDuration, explosionDelay: main.explosionDelay },
+      "main",
+      1.0,
+      () => {
+        stateRef.current = FWState.MAIN_EXPLODE;
+        addTimer(() => {
+          stateRef.current = FWState.MAIN_TEXT;
+          activeTextRef.current = main.text;
+          textKindRef.current = "main";
+          // Setelah Main text hold selesai → SCHEDULE SEMUA WISHES SEKALIGUS (overlap)
+          addTimer(() => {
+            scheduleAllWishesTimeline(cw, ch);
+          }, main.displayDuration);
+        }, (main.explosionDelay || 0) + 450);
+      },
+    );
+  };
+
+  // 📅 TIMELINE SCHEDULER: schedule launch wish[0] at t=0, wish[1] at t=interval, wish[2] t=2*interval dst → SETELAH final launch date → start final firework.
+  const scheduleAllWishesTimeline = (cw: number, ch: number) => {
+    stateRef.current = FWState.WISH_LAUNCH;
+    const wishCfg = resolvedCfg.wishes;
+    const anim = wishCfg.animation;
+    const N = wishes.length;
+    if (N === 0) { startFinal(cw, ch); return; }
+
+    // Schedule EVERY wish at offset i * interval (OVERLAP! no await)
+    let lastWishLaunchOffset = 0;
+    for (let i = 0; i < N; i++) {
+      const offset = i * Math.max(100, wishCfg.interval);
+      lastWishLaunchOffset = Math.max(lastWishLaunchOffset, offset);
+      const palette = PALETTE_WISH[i % PALETTE_WISH.length];
+      addTimer(() => {
+        const item = wishes[i] as any;
+        if (!item || !item.text) return;
+        // Wish explosion scale 0.92, sesuai kecepatan wish
+        launchOneFirework(
+          cw, ch, item, palette,
+          { launchDuration: anim.launchDuration, explosionDelay: anim.explosionDelay },
+          "wish",
+          0.92,
+          () => {
+            stateRef.current = stateRef.current < FWState.WISH_EXPLODE ? FWState.WISH_EXPLODE : stateRef.current;
+            addTimer(() => {
+              stateRef.current = stateRef.current < FWState.WISH_TEXT ? FWState.WISH_TEXT : stateRef.current;
+              activeTextRef.current = item.text;
+              textKindRef.current = "wish";
+            }, anim.explosionDelay + 220);
+          },
+        );
+      }, offset);
+    }
+
+    // Schedule FINAL firework: ketika wish TERAKHIR sudah punya waktu selesai total (launch + explode + formation + hold + fade + safety 300)
+    const finalAfter =
+      lastWishLaunchOffset +
+      (anim.launchDuration + anim.explosionDelay + anim.textFormationDuration + anim.textHoldDuration + anim.fadeDuration) +
+      320;
+    if (finalScheduledRef.current) return;
+    finalScheduledRef.current = true;
+    addTimer(() => { startFinal(cw, ch); }, finalAfter);
+  };
+
+  // 🎆 FINAL FIREWORK (lebih besar, posisi tengah, 2 sekunder kiri kanan) → transition out
   const startFinal = (cw: number, ch: number) => {
     stateRef.current = FWState.FINAL_LAUNCH;
-    const { ending } = fwCfg;
+    const ending = resolvedCfg.ending;
     const palette = ["#FFD86B", "#FF8AA8", "#FFE9A8", "#A084FF", "#FFFFFF"];
-    const duration = 1900;
-    const rocket: Rocket = {
-      x: cw * 0.5 + (Math.random() - 0.5) * 12,
-      y: ch + 20,
-      startY: ch + 20,
-      targetY: ch * 0.28,
-      vy: 0,
-      startAt: performance.now(),
-      duration,
-      color: "#FFFFFF",
-      trailTimer: 0,
-      exploded: false,
-      size: 5.3,
-      t: 0,
-    };
-    rocketsRef.current.push(rocket);
-    addTimer(() => {
-      explodeAt(rocket.x, rocket.targetY, palette, 1.4, cw, ch, ending.text, "final");
-      stateRef.current = FWState.FINAL_EXPLODE;
-      addTimer(() => {
-        explodeAt(cw * 0.26, ch * 0.38, PALETTE_WISH[1].slice(0, 3), 0.72, cw, ch, "", "final");
-      }, 220);
-      addTimer(() => {
-        explodeAt(cw * 0.74, ch * 0.35, PALETTE_WISH[2].slice(0, 3), 0.72, cw, ch, "", "final");
-      }, 400);
-      addTimer(() => {
-        stateRef.current = FWState.FINAL_TEXT;
-        activeTextRef.current = ending.text;
-        textKindRef.current = "final";
+    const duration = typeof ending.launchDuration === "number" ? ending.launchDuration : 1900;
+    launchOneFirework(
+      cw, ch,
+      { text: ending.text, position: { x: 0.50, y: 0.29 }, launch: { x: 0.50, y: 0.95 } },
+      palette,
+      { launchDuration: duration, explosionDelay: 400 },
+      "final",
+      1.4,
+      () => {
+        stateRef.current = FWState.FINAL_EXPLODE;
         addTimer(() => {
-          beginTransitionOut(cw, ch);
-        }, ending.duration || 3000);
-      }, 620);
-    }, duration + 20);
+          explodeAt(cw * 0.24, ch * 0.40, PALETTE_WISH[1].slice(0, 3), 0.72, cw, ch, "", "final");
+        }, 220);
+        addTimer(() => {
+          explodeAt(cw * 0.76, ch * 0.37, PALETTE_WISH[2].slice(0, 3), 0.72, cw, ch, "", "final");
+        }, 400);
+        addTimer(() => {
+          stateRef.current = FWState.FINAL_TEXT;
+          activeTextRef.current = ending.text;
+          textKindRef.current = "final";
+          addTimer(() => { beginTransitionOut(cw, ch); }, ending.duration || 3000);
+        }, 640);
+      },
+    );
   };
 
   const explodeAt = (
@@ -574,6 +765,11 @@ export default function FireworkScene() {
         r.t = Math.min(1, (now - r.startAt) / r.duration);
         const eased = 1 - Math.pow(1 - r.t, 2.6);
         r.y = r.startY + (r.targetY - r.startY) * eased;
+        // ✅ Gerak X juga (startX → targetX) untuk roket wish yang menuju posisi kiri/kanan!
+        const rAny = r as any;
+        const rStartX = typeof rAny.startX === "number" ? rAny.startX : r.x;
+        const rTargetX = typeof rAny.targetX === "number" ? rAny.targetX : r.x;
+        r.x = rStartX + (rTargetX - rStartX) * eased;
         r.trailTimer += dt;
         const spawnEvery = reduced ? 16 : 9;
         if (r.trailTimer >= spawnEvery) {

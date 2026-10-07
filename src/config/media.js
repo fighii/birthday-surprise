@@ -176,35 +176,91 @@ export const music = {
 // 5. SCENE BARU: Firework & Wishes (Scene 2 — sebelum Polaroid)
 // ------------------------------
 // Semua teks wishes & timing bisa diubah DISINI TANPA sentuh kode animasi.
-// Tambah / kurangi array wishes sesuai keinginan.
+// STRUKTUR BARU: wishes.interval (ms, overlap default 1 detik) + wishes.items[] (per wish ada text + posisi + launch pos)
+// BACKWARD COMPATIBLE: masih mendukung format LAMA wishes[] array string & wishInterval number.
 export const fireworkConfig = {
   enabled: true,
 
   // Kembang API UTAMA di AWAL scene (sebelum wishes)
   mainBirthday: {
     text: "HAPPY BIRTHDAY",
-    launchDuration: 1800,
-    explosionDelay: 300,
-    displayDuration: 2800,
+    launchDuration: 1800,        // ms roket terbang menuju langit
+    explosionDelay: 300,          // jeda sebelum state berubah explode → text
+    textFormationDuration: 1000,  // ms fase partikel membentuk huruf
+    textHoldDuration: 2200,       // ms text bertahan FULLY FORMED sebelum fade
+    displayDuration: 2800,        // backward compat = formation + hold kira kira
   },
 
-  // WISHES = 1 kembang api per item. TAMBAH / KURANGI array ini SESUKA HATI!
-  wishes: [
-    "WISH YOU ALL THE BEST",
-    "SEHAT SELALU",
-    "DIPENUHI CINTA",
-    "SEMOGA SEMUA IMPIANMU TERWUJUD",
-    "SELALU DIBERIKAN KEBAHAGIAAN",
-    "SEMOGA LANGKAHMU SELALU DIMUDAHKAN",
-    "SEMOGA KITA SELALU BERSAMA",
-  ],
+  // WISHES = 1 kembang api per item. TAMBAH / KURANGI array items SESUKA HATI!
+  wishes: {
+    // 🏁 OVERLAP INTERVAL (ms). 1000 = setiap 1 detik luncurkan 1 wish,
+    // TANPA menunggu wish sebelumnya selesai! (natural cinematic fireworks)
+    interval: 1000,
 
-  // Jeda antar wish (ms) — setelah wish Fade OUT, berapa lama sebelum rocket next wish launch
-  wishInterval: 2200,
+    // Default animasi per wish (bisa di override di items level future)
+    animation: {
+      launchDuration: 720,          // ms roket wish naik ke langit
+      explosionDelay: 260,          // jeda explode state → converge text
+      textFormationDuration: 900,   // ms partikel menyusun huruf
+      textHoldDuration: 1800,       // ms text utuh sebelum fade
+      fadeDuration: 900,            // ms fade text out
+    },
+
+    // 6 Default wishes dengan posisi SPREAD (tidak saling menutupi).
+    // x dan y = PERSENTASE LEBAR / TINGGI CANVAS (0.0 kiri/atas → 1.0 kanan/bawah)
+    // Safe area posisi: y 0.18 ... 0.70, x 0.16 ... 0.84
+    items: [
+      {
+        text: "WISH YOU ALL THE BEST",
+        position: { x: 0.50, y: 0.22 }, // TENGAH ATAS
+        launch:   { x: 0.50, y: 0.95 }  // mulai dari tengah bawah
+      },
+      {
+        text: "SEHAT SELALU",
+        position: { x: 0.24, y: 0.40 }, // KIRI TENGAH
+        launch:   { x: 0.50, y: 0.95 }
+      },
+      {
+        text: "DIPENUHI CINTA",
+        position: { x: 0.76, y: 0.40 }, // KANAN TENGAH
+        launch:   { x: 0.50, y: 0.95 }
+      },
+      {
+        text: "SEMOGA SEMUA IMPIANMU TERWUJUD",
+        position: { x: 0.50, y: 0.58 }, // TENGAH BAWAH
+        launch:   { x: 0.50, y: 0.95 }
+      },
+      {
+        text: "SELALU DIBERIKAN KEBAHAGIAAN",
+        position: { x: 0.22, y: 0.72 }, // KIRI BAWAH
+        launch:   { x: 0.50, y: 0.95 }
+      },
+      {
+        text: "SEMOGA KITA SELALU BERSAMA",
+        position: { x: 0.78, y: 0.72 }, // KANAN BAWAH
+        launch:   { x: 0.50, y: 0.95 }
+      },
+    ],
+
+    // ⬇️ BACKWARD COMPAT (LAMA): masih didukung. Jika format lama dipakai di atas = array string,
+    // sistem akan otomatis convert ke items di runtime (lihat FireworkScene.tsx).
+    _legacyList: [
+      "WISH YOU ALL THE BEST",
+      "SEHAT SELALU",
+      "DIPENUHI CINTA",
+      "SEMOGA SEMUA IMPIANMU TERWUJUD",
+      "SELALU DIBERIKAN KEBAHAGIAAN",
+      "SEMOGA LANGKAHMU SELALU DIMUDAHKAN",
+      "SEMOGA KITA SELALU BERSAMA",
+    ],
+    // ⬇️ BACKWARD COMPAT (LAMA): wishInterval = mapping ke interval (jika user pake format old number)
+    _legacyInterval: 2200,
+  },
 
   // Kembang api TERAKHIR (SETELAH semua wishes selesai)
   ending: {
     text: "HAPPY BIRTHDAY, MY LOVE",
     duration: 3000,
+    launchDuration: 1900,
   },
 };
