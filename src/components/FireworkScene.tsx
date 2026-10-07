@@ -282,16 +282,20 @@ export default function FireworkScene() {
     octx.textAlign = "center";
     octx.textBaseline = "middle";
 
-    // SAFE AREA = margin kiri/kanan/atas/bawah (pixel DINAMIS berdasar lebar layar)
-    const safePadX = Math.max(18, cw * 0.07);  // min 18px + 7% width
-    const safePadY = Math.max(22, ch * 0.08);  // min 22px + 8% height
+    // SAFE AREA LAYER 1: Persentase layar + pixel minimal
+    const rawSafePadX = Math.max(18, cw * 0.085);  // 18px + 8.5% width (naik dari 7%)
+    const rawSafePadY = Math.max(26, ch * 0.095);  // 26px + 9.5% height (naik dari 8%)
+    // SAFE AREA LAYER 2: IPHONE EXPLICIT HARDCODE (Dynamic Island 59px top, Home Indicator 34px bottom)
+    const safeAreaTop = Math.max(rawSafePadY, 59 + 26);   // Dynamic Island 59px + 26px breathing space = MIN 85px ATAS
+    const safeAreaBottom = Math.max(rawSafePadY, 34 + 26); // Home Indicator 34px + 26px breathing space = MIN 60px BAWAH
+    const safePadX = rawSafePadX;
     // Safe bounds (canvas pixel yang BOLEH ditempati text pixel)
     const safeL = safePadX;
     const safeR = cw - safePadX;
-    const safeT = safePadY;
-    const safeB = ch - safePadY;
-    const safeW = safeR - safeL;
-    const safeH = safeB - safeT;
+    const safeT = safeAreaTop;
+    const safeB = ch - safeAreaBottom;
+    const safeW = Math.max(60, safeR - safeL);
+    const safeH = Math.max(120, safeB - safeT);
 
     const words = text.split(/\s+/).filter(Boolean);
     let lines: string[] = [];
@@ -320,24 +324,26 @@ export default function FireworkScene() {
     }
 
     // 2) Auto SCALE DOWN fs jika total width/height melebihi SAFE BOUNDS.
-    //    Ukur lagi setelah split, loop kurangi fs sampai masuk safe.
-    const maxIter = 16;
+    //    Ukur lagi setelah split, loop kurangi fs sampai masuk safe. LEBIH KETAT (0.94, bukan 0.995)
+    const maxIter = 20;
     for (let it = 0; it < maxIter; it++) {
-      const lh = fs * 1.22;
+      const lh = fs * 1.26;
       octx.font = fontStr(fs);
       let maxLineW = 0;
       for (const l of lines) maxLineW = Math.max(maxLineW, octx.measureText(l).width);
       const totalH = lh * lines.length;
-      if (maxLineW <= safeW * 0.995 && totalH <= safeH * 0.995) break;
-      fs = Math.max(10, fs * 0.9);
+      if (maxLineW <= safeW * 0.92 && totalH <= safeH * 0.92) break;
+      fs = Math.max(10, fs * 0.88);
       if (fs <= 10) break;
     }
     // Tambahan: pixel size offset padding (anti crop pinggiran font saat raster)
-    const pixPadX = Math.max(3, Math.round(fs * 0.08));
-    const pixPadY = Math.max(3, Math.round(fs * 0.08));
+    // NAIK: 10% dari font size, MIN 4px (dulu 8% min 3px)
+    const pixPadX = Math.max(4, Math.round(fs * 0.10));
+    const pixPadY = Math.max(4, Math.round(fs * 0.10));
 
     // 3) Hitung BOUNDING BOX text (centerX, centerY) → geser centerX/Y jika keluar safe area.
-    const lh = fs * 1.22;
+    //    LINE HEIGHT sama persis dengan scale down loop agar hitungan bounding konsisten
+    const lh = fs * 1.26;
     octx.font = fontStr(fs);
     let maxLineW = 0;
     for (const l of lines) maxLineW = Math.max(maxLineW, octx.measureText(l).width);
@@ -346,9 +352,10 @@ export default function FireworkScene() {
 
     let targetCenterX = centerX;
     let targetCenterY = centerY;
-    // Clamp box supaya FULLY WITHIN SAFE AREA
-    const halfW = totalW / 2;
-    const halfH = totalH / 2;
+    // Clamp box supaya FULLY WITHIN SAFE AREA (beri extra margin 4px lagi agar TIDAK MEPET)
+    const extraBreath = 4;
+    const halfW = totalW / 2 + extraBreath;
+    const halfH = totalH / 2 + extraBreath;
     const boxL = targetCenterX - halfW;
     const boxR = targetCenterX + halfW;
     const boxT = targetCenterY - halfH;
@@ -366,18 +373,22 @@ export default function FireworkScene() {
       octx.fillText(line, targetCenterX, startY + i * lh);
     });
 
-    // 5) Rasterize alpha → points. Step = 9px (renggang natural pixel art)
+    // 5) Rasterize alpha → points. STEP LEBIH KECIL (dulu step=9 → 3 css px → SEKARANG step=6 → 3 css px LEBIH RAPAT SAMPLING!)
+    //    Step kecil = lebih banyak pixel LED = huruf lebih jelas bentuknya TIDAK BOLONG / terpencil step.
     const img = octx.getImageData(0, 0, off.width, off.height).data;
     const pts: { x: number; y: number }[] = [];
-    const step = Math.max(9, Math.floor(scale * 4.5));
+    const step = Math.max(6, Math.floor(scale * 3));
+    // ALPHA THRESHOLD TURUNKAN DRAMATIS: dulu 190 TERLALU KETAT (pinggir huruf terpotong)
+    // → SEKARANG 110, pixel pinggir alpha 110+ tetap ikut, shape huruf TIDAK TERPOTONG.
+    const aThresh = 110;
     for (let y = 0; y < off.height; y += step) {
       for (let x = 0; x < off.width; x += step) {
         const a = img[(y * off.width + x) * 4 + 3];
-        if (a > 190) { // Alpha lebih ketat = shape crisp, tidak blur pinggir
+        if (a > aThresh) {
           const px = Math.round(x / scale);
           const py = Math.round(y / scale);
-          // Filter HARD: hanya pixel di DALAM safe area yang diikutsertakan (anti keluar layar!)
-          if (px >= safeL && px <= safeR && py >= safeT && py <= safeB) {
+          // Filter HARD 2x: HANYA pixel di DALAM safe area YANG JAUH 4px DARI pinggir safe (anti mepet crop!)
+          if (px >= safeL + extraBreath && px <= safeR - extraBreath && py >= safeT + extraBreath && py <= safeB - extraBreath) {
             pts.push({ x: px, y: py });
           }
         }
@@ -560,15 +571,27 @@ export default function FireworkScene() {
     const count = Math.floor(baseCount * scale);
     const dominantColor = palette[0];
     const accentColor = palette[1] ?? dominantColor;
-    // ✅ UKURAN PIXEL LEBIH BESAR 1.4-1.5x (proporsional, matching font size baru)
+
+    // ✅✨ PIXEL NATURAL SQUARE — SEMUA UKURAN = INTEGER BULAT KELIPATAN, BUKAN FLOAT!
+    // Sehingga visual LED pixel board NATURAL, bukan kotak berantakan random.
     const pixSize =
-      kind === "final" ? 3.05 : kind === "main" ? 2.85 : kind === "wish" ? 2.4 : 2.5;
+      kind === "final" ? 4 : kind === "main" ? 4 : kind === "wish" ? 3 : 3;
+
+    // Predefined integer sizes (2,3,4,5,6) untuk explode — distribusi weighted:
+    // lebih banyak size 3+4 = natural fireworks LED, bukan blur random.
+    const explodeSizesPool: number[] = [2,2,3,3,3,3,4,4,4,5,6];
 
     for (let i = 0; i < count; i++) {
       const angle = (Math.PI * 2 * i) / count + (Math.random() - 0.5) * 0.32;
       const speed = (0.13 + Math.random() * 0.62) * scale * (reduced ? 0.82 : 1);
       const isForm = Math.random() < 0.55 && textForForm.length > 0;
       const color = isForm ? (Math.random() < 0.78 ? dominantColor : accentColor) : sampleColor(palette);
+
+      // KUANTISASI KE INTEGER — pixel = kotak LED ukuran seragam!
+      const finalSize: number = isForm
+        ? pixSize + (Math.random() < 0.3 ? 1 : 0) // 3/4 integer, bukan 2.4-3.1
+        : explodeSizesPool[Math.floor(Math.random() * explodeSizesPool.length)];
+
       const p: Particle = {
         x: cx,
         y: cy,
@@ -576,21 +599,20 @@ export default function FireworkScene() {
         vy: Math.sin(angle) * speed,
         life: 0,
         maxLife: isForm ? 4600 + Math.random() * 1600 : 1600 + Math.random() * 1600,
-        size: isForm
-          ? pixSize * (0.93 + Math.random() * 0.18)
-          // EXPLODE PARTICLE SQUARE LEBIH BESAR (1.8x → 3.6x scale, bukan 1.2→2.4!)
-          : (1.8 + Math.random() * 3.5) * scale,
+        size: finalSize,
         color,
         kind: isForm ? "textForm" : "explode",
         alpha: 1,
         gravity: isForm ? 0 : 0.00015 + Math.random() * 0.00022,
         drag: isForm ? 0.986 : 0.988 - Math.random() * 0.008,
-        glow: isForm ? pixSize * 6.2 : 10 + Math.random() * 16 * scale,
+        glow: isForm ? pixSize * 6 : 10 + Math.random() * 16 * scale,
       };
       spawnParticle(p);
     }
-    // Sparkle particle size BESAR + SQUARE nanti di render
-    for (let i = 0; i < (reduced ? 22 : 40) * scale; i++) {
+    // ✨ Sparkle particle JUGA INTEGER: 2 / 2 / 3 pool, random pick, BUKAN 1.0-2.7 float!
+    const sparklePool: number[] = [2,2,2,3,3,4];
+    const sparkleN = Math.floor((reduced ? 22 : 40) * scale);
+    for (let i = 0; i < sparkleN; i++) {
       const angle = Math.random() * Math.PI * 2;
       const speed = (0.06 + Math.random() * 0.33) * scale;
       spawnParticle({
@@ -600,7 +622,7 @@ export default function FireworkScene() {
         vy: Math.sin(angle) * speed,
         life: 0,
         maxLife: 650 + Math.random() * 1100,
-        size: 1.0 + Math.random() * 1.7,
+        size: sparklePool[Math.floor(Math.random() * sparklePool.length)],
         color: sampleColor(palette),
         kind: "sparkle",
         alpha: 1,
@@ -652,13 +674,13 @@ export default function FireworkScene() {
               vy: Math.sin(angle) * speed,
               life: 0,
               maxLife: 4700 + Math.random() * 1500,
-              size: pixSize * (0.91 + Math.random() * 0.21),
+              size: pixSize + (Math.random() < 0.25 ? 1 : 0),
               color: Math.random() < 0.82 ? dominantColor : accentColor,
               kind: "textForm",
               alpha: 1,
               gravity: 0,
               drag: 0.986,
-              glow: pixSize * 6.2,
+              glow: pixSize * 6,
               tx: t.x,
               ty: t.y,
               startX: sx,
@@ -820,7 +842,7 @@ export default function FireworkScene() {
         ctx.globalCompositeOperation = "source-over";
         // ✅ Rocket CORE = SQUARE PIXEL (bukan lingkaran! Matching pixel art font & particles)
         ctx.fillStyle = "#FFFFFF";
-        const coreSz = r.size * 1.15;
+        const coreSz = Math.max(2, Math.round(r.size * 1.15));
         ctx.fillRect(r.x - coreSz / 2, r.y - coreSz / 2, coreSz, coreSz);
 
         if (r.t >= 1) {
@@ -914,12 +936,13 @@ export default function FireworkScene() {
           ctx.fill();
         }
         // ✅ ALL PARTICLES = SQUARE fillRect (100% pixel art style, matching font pixel!)
-        // Sebelumnya: explode, sparkle, rocketTrail = arc() BULAT → sekarang SEMUA KOTAK SAMA!
+        // ✅✨ PIXEL SQUARE INTEGER SIZE: sz dibulatkan SELALU ke integer kelipatan!
+        // Ini membuat semua LED pixel fireworks TERLIHAT NATURAL pixel board, bukan float blur.
         ctx.globalAlpha = alpha;
         ctx.fillStyle = p.color;
-        const sz = p.size;
-        const hsz = sz / 2;
-        ctx.fillRect(p.x - hsz, p.y - hsz, sz, sz);
+        const sz = Math.max(1, Math.round(p.size));
+        const hsz = (sz % 2 === 0) ? sz / 2 : sz / 2;
+        ctx.fillRect(Math.round(p.x - hsz), Math.round(p.y - hsz), sz, sz);
       }
       ctx.globalAlpha = 1;
       ctx.globalCompositeOperation = "source-over";

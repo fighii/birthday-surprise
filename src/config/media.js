@@ -195,7 +195,7 @@ export const fireworkConfig = {
   wishes: {
     // 🏁 OVERLAP INTERVAL (ms). 1000 = setiap 1 detik luncurkan 1 wish,
     // TANPA menunggu wish sebelumnya selesai! (natural cinematic fireworks)
-    interval: 1000,
+    interval: 1500,
 
     // Default animasi per wish (bisa di override di items level future)
     animation: {
