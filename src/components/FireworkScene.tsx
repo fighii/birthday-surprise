@@ -373,24 +373,41 @@ export default function FireworkScene() {
       octx.fillText(line, targetCenterX, startY + i * lh);
     });
 
-    // 5) Rasterize alpha → points. STEP LEBIH KECIL (dulu step=9 → 3 css px → SEKARANG step=6 → 3 css px LEBIH RAPAT SAMPLING!)
-    //    Step kecil = lebih banyak pixel LED = huruf lebih jelas bentuknya TIDAK BOLONG / terpencil step.
+    // 5) Rasterize alpha → points. STEP PALING KECIL = 5px scale*2.5 (LEBIH PADAT SAMPLING!)
+    //    Step kecil = pixel LEBIH BANYAK → huruf TIDAK BOLONG, bentuk JELAS TERBACA
     const img = octx.getImageData(0, 0, off.width, off.height).data;
-    const pts: { x: number; y: number }[] = [];
-    const step = Math.max(6, Math.floor(scale * 3));
-    // ALPHA THRESHOLD TURUNKAN DRAMATIS: dulu 190 TERLALU KETAT (pinggir huruf terpotong)
-    // → SEKARANG 110, pixel pinggir alpha 110+ tetap ikut, shape huruf TIDAK TERPOTONG.
-    const aThresh = 110;
+    const ptsBase: { x: number; y: number }[] = [];
+    const step = Math.max(5, Math.floor(scale * 2.5));
+    // ALPHA THRESHOLD PALING RENDAH = 90 (PINGGIR HURUF LENGKUNG S, O, R TETAP MASUK — TIDAK TERIPOTONG!)
+    const aThresh = 90;
     for (let y = 0; y < off.height; y += step) {
       for (let x = 0; x < off.width; x += step) {
         const a = img[(y * off.width + x) * 4 + 3];
         if (a > aThresh) {
           const px = Math.round(x / scale);
           const py = Math.round(y / scale);
-          // Filter HARD 2x: HANYA pixel di DALAM safe area YANG JAUH 4px DARI pinggir safe (anti mepet crop!)
           if (px >= safeL + extraBreath && px <= safeR - extraBreath && py >= safeT + extraBreath && py <= safeB - extraBreath) {
-            pts.push({ x: px, y: py });
+            ptsBase.push({ x: px, y: py });
           }
+        }
+      }
+    }
+    // ✨ OUTLINE PUTIH 1 PIXEL: Tambahkan pixel TETANGGA (atas/bawah/kiri/kanan) SETIAP titik text
+    //    Hasil = text pixel PUNYA BINGKAI PUTIH OTOMATIS → BISA TERBACA JELAS walau ada ledakan warna WARNI di BELAKANG!
+    const pts: { x: number; y: number; outlined?: boolean }[] = [...ptsBase];
+    const outlineStep = Math.max(3, step - 2); // Outline 3-4px (1 pixel board offset)
+    for (const p of ptsBase) {
+      const neighbors: [number, number][] = [
+        [p.x - outlineStep, p.y], // kiri
+        [p.x + outlineStep, p.y], // kanan
+        [p.x, p.y - outlineStep], // atas
+        [p.x, p.y + outlineStep], // bawah
+      ];
+      for (const [nx, ny] of neighbors) {
+        if (nx >= safeL + extraBreath && nx <= safeR - extraBreath &&
+            ny >= safeT + extraBreath && ny <= safeB - extraBreath) {
+          // Cek duplikat (tidak usah ketat, biarin sedikit overlap = outline lebih tegas)
+          pts.push({ x: nx, y: ny, outlined: true });
         }
       }
     }
@@ -399,7 +416,7 @@ export default function FireworkScene() {
         pts.push({ x: targetCenterX + (Math.random() - 0.5) * 160, y: targetCenterY + (Math.random() - 0.5) * 60 });
       }
     }
-    return pts;
+    return pts as { x: number; y: number }[];
   };
 
   // ========================================================
@@ -582,40 +599,43 @@ export default function FireworkScene() {
     const sparklePool: number[] = [2,2,2,3,3,4];
 
     // =========================================================
-    // 💥 BURST 1: LEDAKAN PERTAMA 100% EXPLODE (TIDAK ADA TEXT)
-    //            Pastikan ledakan TERLIHAT JELAS sebelum text terbentuk!
+    // 💥 BURST 1: LEDAKAN PERTAMA 100% EXPLODE (DIKURANGI AGAR TIDAK MENUUTPI TEXT!)
+    //            Warna HARMONY SAMA PALETTE TEXT (bukan random acak ribet)
     // =========================================================
-    const burst1Count = Math.floor((reduced ? 110 : 180) * scale); // lebih banyak dari sebelumnya!
+    const burst1Count = Math.floor((reduced ? 80 : 125) * scale); // Dikurangi dari 180 → 125 (tidak menutupi text)
     for (let i = 0; i < burst1Count; i++) {
       const angle = (Math.PI * 2 * i) / burst1Count + (Math.random() - 0.5) * 0.38;
       const speed = (0.16 + Math.random() * 0.68) * scale * (reduced ? 0.84 : 1);
-      // 100% = explode JANGAN DIUBAH jadi text, tetap berhamburan seperti kembang api normal!
+      // WARNA LEDAKAN HARMONY: 80% dominant/accent (SAMA DENGAN WARNA TEXT) 20% palette lain
+      const color = Math.random() < 0.82
+        ? (Math.random() < 0.74 ? dominantColor : accentColor)
+        : sampleColor(palette);
       const p: Particle = {
         x: cx,
         y: cy,
         vx: Math.cos(angle) * speed,
         vy: Math.sin(angle) * speed,
         life: 0,
-        // 💥 Life explode DIPERPANJANG +800ms: sambil text terbentuk ledakan masih kelihatan!
         maxLife: 2400 + Math.random() * 1800,
         size: explodeSizesPool[Math.floor(Math.random() * explodeSizesPool.length)],
-        color: sampleColor(palette),
+        color,
         kind: "explode",
         alpha: 1,
         gravity: 0.00018 + Math.random() * 0.00024,
         drag: 0.988 - Math.random() * 0.008,
-        glow: 14 + Math.random() * 20 * scale, // glow lebih besar = LEDAKAN LEBIH TERANG
+        glow: 14 + Math.random() * 20 * scale,
       };
       spawnParticle(p);
     }
 
     // =========================================================
-    // 💥 BURST 2: LEDAKAN SPARKLE EXTRA (tambahan terang)
+    // 💥 BURST 2: SPARKLE EXTRA (DIKURANGI → HARMONY tidak mengganggu)
     // =========================================================
-    const sparkleN = Math.floor((reduced ? 28 : 52) * scale);
+    const sparkleN = Math.floor((reduced ? 18 : 30) * scale); // 52 → 30 (kurangi kilatan berlebih)
     for (let i = 0; i < sparkleN; i++) {
       const angle = Math.random() * Math.PI * 2;
       const speed = (0.07 + Math.random() * 0.38) * scale;
+      const color = Math.random() < 0.72 ? dominantColor : accentColor;
       spawnParticle({
         x: cx,
         y: cy,
@@ -624,7 +644,7 @@ export default function FireworkScene() {
         life: 0,
         maxLife: 900 + Math.random() * 1400,
         size: sparklePool[Math.floor(Math.random() * sparklePool.length)],
-        color: sampleColor(palette),
+        color,
         kind: "sparkle",
         alpha: 1,
         gravity: 0.00005,
@@ -634,18 +654,18 @@ export default function FireworkScene() {
     }
 
     // =========================================================
-    // 📝 HANYA 32% SAJA particle tambahan yang akan membentuk text!
-    //    Sebagian besar = LEDAKAN biasa (burst1) supaya ledakan TETAP TERLIHAT JELAS.
+    // 📝 TEXTFORM RATIO NAIK 32% → 48%: LEBIH BANYAK PIXEL → HURUF LEBIH PADAT JELAS!
+    //    Warna 100% DOMINAN + ACCENT TEXT (BUKAN campur random palette)
     // =========================================================
     if (textForForm.length > 0) {
-      const candidateCount = Math.floor((reduced ? 70 : 128) * scale);
+      const candidateCount = Math.floor((reduced ? 90 : 160) * scale); // CANDIDATE NAIK (lebih tersedia untuk text)
       for (let i = 0; i < candidateCount; i++) {
         const angle = (Math.PI * 2 * i) / candidateCount + (Math.random() - 0.5) * 0.28;
         const speed = (0.10 + Math.random() * 0.52) * scale * (reduced ? 0.82 : 1);
-        const isForm = Math.random() < 0.32; // HANYA 32% menjadi text! sisanya 68% explode biasa
+        const isForm = Math.random() < 0.48; // RATIO NAIK: 48% jadi text (dulu 32%)
         const color = isForm
-          ? (Math.random() < 0.8 ? dominantColor : accentColor)
-          : sampleColor(palette);
+          ? (Math.random() < 0.86 ? dominantColor : accentColor) // 100% warna TEXT, bukan campur!
+          : (Math.random() < 0.82 ? (Math.random() < 0.74 ? dominantColor : accentColor) : sampleColor(palette));
         const finalSize: number = isForm
           ? pixSize + (Math.random() < 0.28 ? 1 : 0)
           : explodeSizesPool[Math.floor(Math.random() * explodeSizesPool.length)];
@@ -677,8 +697,13 @@ export default function FireworkScene() {
           : kind === "main"
           ? Math.max(28, Math.min(62, cw * 0.128))
           : Math.max(22, Math.min(50, cw * 0.098));
-      // ✅ PUSAT TEXT = (cx, cy) — DI TEMPAT KEMBANG API MELEDAK! bukan tengah canvas
-      const pts = sampleTextPoints(textForForm, fontSize, 0, cw, ch, cx, cy);
+      // ✅ PUSAT TEXT = (cx, cy) + sampleTextPoints SEKARANG ADA OUTLINE INFO (pts.length NAIK 5x)
+      const ptsRaw = sampleTextPoints(textForForm, fontSize, 0, cw, ch, cx, cy);
+      // Pisahkan pts jadi CORE TEXT (0 - ptsBaseCount) dan OUTLINE TEXT (ptsBaseCount - akhir)
+      // Outline nanti spawn particle WARNA PUTIH agar text ADA BINGKAI PUTIH 1 PIXEL = JELAS TERBACA!
+      const pts = ptsRaw;
+      // Hitung ratio: outline = 4neighbors + 1core → 1/5 = core, 4/5 = outline. Tapi ptsBaseCount tidak disimpan kembali,
+      // Workaround: Mark particle TEXT OUTLINE jika index > pts.length * 0.2 (bagian terakhir = neighbor yang ditambahkan tadi)
       if (pts.length > 0) {
         const existingCandidates = particlesRef.current.filter(
           (p) => p.kind === "textForm" && p.tx === undefined && p.life < 200,
@@ -688,7 +713,12 @@ export default function FireworkScene() {
             const t = pts[i % pts.length];
             p.tx = t.x;
             p.ty = t.y;
-            // ✅ TRUE TWEEN: simpan START POSISI (cx, cy = area ledakan) -> transisi jelas cinematic
+            // ✅ PUTIHKAN PARTICLE JIKA TERMASUK OUTLINE (index >= 20% akhir pts)
+            const isOutlineIdx = i >= Math.floor(list.length * 0.20);
+            if (isOutlineIdx) {
+              p.color = "#FFFFFF"; // BINGKAI PUTIH 1 PIXEL OTOMATIS!
+              p.glow = pixSize * 5.2;
+            }
             p.startX = p.x;
             p.startY = p.y;
             p.tweenT = 0;
@@ -699,12 +729,18 @@ export default function FireworkScene() {
         const assigned = Math.min(existingCandidates.length, pts.length);
         const remaining = pts.length - assigned;
         if (remaining > 0) {
+          // Workaround outline ratio: 1 core + 4neighbors = 5 total → 20% pertama = COLORED CORE, 80% terakhir = PUTIH OUTLINE
+          const coreThreshold = Math.max(1, Math.floor(pts.length * 0.20));
           for (let k = assigned; k < pts.length; k++) {
             const t = pts[k];
             const angle = Math.random() * Math.PI * 2;
             const speed = 0.11 + Math.random() * 0.48;
             const sx = cx + (Math.random() - 0.5) * 10;
             const sy = cy + (Math.random() - 0.5) * 10;
+            // ✅ OUTLINE 80% TERAKHIR = WARNA PUTIH! (bingkai pixel biar text jelas terbaca walau explode di belakang)
+            const isOutlineK = k >= coreThreshold;
+            const textColor: string = isOutlineK ? "#FFFFFF" : (Math.random() < 0.88 ? dominantColor : accentColor);
+            const textSize: number = isOutlineK ? Math.max(2, pixSize - 1) : (pixSize + (Math.random() < 0.25 ? 1 : 0));
             spawnParticle({
               x: sx,
               y: sy,
@@ -712,13 +748,13 @@ export default function FireworkScene() {
               vy: Math.sin(angle) * speed,
               life: 0,
               maxLife: 4700 + Math.random() * 1500,
-              size: pixSize + (Math.random() < 0.25 ? 1 : 0),
-              color: Math.random() < 0.82 ? dominantColor : accentColor,
+              size: textSize,
+              color: textColor,
               kind: "textForm",
               alpha: 1,
               gravity: 0,
               drag: 0.986,
-              glow: pixSize * 6,
+              glow: isOutlineK ? pixSize * 4.6 : pixSize * 6,
               tx: t.x,
               ty: t.y,
               startX: sx,
