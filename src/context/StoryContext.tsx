@@ -54,15 +54,15 @@ interface StoryContextValue extends StoryState {
 const StoryContext = createContext<StoryContextValue | null>(null);
 
 const SCENE_MOOD: Record<SceneId, SceneMood> = {
-  1: "opening",
-  2: "night",
-  3: "warm",
-  4: "memory",
-  5: "bright",
-  6: "cinematic",
-  7: "darker",
-  8: "romantic",
-  9: "veryDark",
+  1: "reveal",
+  2: "reveal",
+  3: "reveal",
+  4: "reveal",
+  5: "reveal",
+  6: "reveal",
+  7: "reveal",
+  8: "reveal",
+  9: "reveal",
   10: "reveal",
 };
 

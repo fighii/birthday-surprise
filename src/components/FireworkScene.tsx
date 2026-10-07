@@ -89,6 +89,9 @@ const PALETTE_WISH: string[][] = [
   ["#FF9A4A", "#FFCB9C"],
 ];
 
+// Tap tercepat yang diterima: 1 detik
+const TAP_COOLDOWN_MS = 1000;
+
 // konstanta: jarak total partikel = v0 * K(drag)
 const kDist = (drag: number) => 16.67 / -Math.log(drag);
 
@@ -100,13 +103,14 @@ export default function FireworkScene() {
   const containerRef = useRef<HTMLDivElement | null>(null);
 
   const stateRef = useRef<FWStateKind>(FWState.IDLE);
-  const [hintOn, setHintOn] = useState(false);
+  const [hintMode, setHintMode] = useState<"start" | "wish" | "off">("off");
   const doneTriggeredRef = useRef(false);
   const startedRef = useRef(false);
   const musicStartedRef = useRef(false);
   const timersRef = useRef<number[]>([]);
   const finalScheduledRef = useRef(false);
   const lastTapRef = useRef(0);
+  const lastWishPosRef = useRef<{ x: number; y: number } | null>(null);
   const tapIdxRef = useRef(0);
   const paletteIdxRef = useRef(0);
 
@@ -252,8 +256,9 @@ export default function FireworkScene() {
     finalScheduledRef.current = false;
     tapIdxRef.current = 0;
     paletteIdxRef.current = 0;
+    lastWishPosRef.current = null;
     clearTimers();
-    setHintOn(false);
+    setHintMode("off");
   };
 
   // =====================================================================
@@ -585,41 +590,22 @@ export default function FireworkScene() {
         addTimer(() => {
           if (stateRef.current < FWState.MAIN_TEXT) stateRef.current = FWState.MAIN_TEXT;
           // tampilkan label "TAP-TAP LAYAR UNTUK WISHES"
-          setHintOn(true);
-          addTimer(() => scheduleAllWishesTimeline(cw, ch), main.displayDuration);
+          setHintMode("wish");
+          if (wishes.length === 0) scheduleFinalAfterLastWish(cw, ch);
         }, (main.explosionDelay || 0) + 450);
       },
     );
   };
 
-  const scheduleAllWishesTimeline = (cw: number, ch: number) => {
-    if (stateRef.current < FWState.WISH_LAUNCH) stateRef.current = FWState.WISH_LAUNCH;
-    const wishCfg = resolvedCfg.wishes;
-    const anim = wishCfg.animation;
-    const N = wishes.length;
-    if (N === 0) { startFinal(cw, ch); return; }
-
-    let lastOffset = 0;
-    for (let i = 0; i < N; i++) {
-      const offset = i * Math.max(100, wishCfg.interval);
-      lastOffset = Math.max(lastOffset, offset);
-      const palette = PALETTE_WISH[paletteIdxRef.current++ % PALETTE_WISH.length];
-      addTimer(() => {
-        const item = wishes[i] as any;
-        if (!item || !item.text) return;
-        launchOneFirework(cw, ch, item, palette, anim, "wish", () => {
-          if (stateRef.current < FWState.WISH_EXPLODE) stateRef.current = FWState.WISH_EXPLODE;
-        });
-      }, offset);
-    }
-
+  // Final otomatis muncul setelah wish TERAKHIR (yang di-tap) selesai tampil
+  const scheduleFinalAfterLastWish = (cw: number, ch: number) => {
     if (finalScheduledRef.current) return;
     finalScheduledRef.current = true;
-    const finalAfter =
-      lastOffset +
-      anim.launchDuration + anim.explosionDelay + anim.textFormationDuration + anim.textHoldDuration + anim.fadeDuration +
-      320;
-    addTimer(() => startFinal(cw, ch), finalAfter);
+    const a = resolvedCfg.wishes.animation;
+    const wait =
+      a.launchDuration + a.explosionDelay + a.textFormationDuration +
+      Math.round(a.textHoldDuration * 0.7) + 400;
+    addTimer(() => startFinal(cw, ch), wait);
   };
 
   const startFinal = (cw: number, ch: number) => {
@@ -653,7 +639,7 @@ export default function FireworkScene() {
     if (stateRef.current === FWState.TRANSITION_OUT || stateRef.current === FWState.DONE) return;
     stateRef.current = FWState.TRANSITION_OUT;
     transitionOutStartRef.current = performance.now();
-    setHintOn(false);
+    setHintMode("off");
     addTimer(() => {
       stateRef.current = FWState.DONE;
       if (!doneTriggeredRef.current) {
@@ -694,15 +680,8 @@ export default function FireworkScene() {
     const ro = new ResizeObserver(resize);
     ro.observe(container);
 
-    if (!musicStartedRef.current) {
-      musicStartedRef.current = true;
-      addTimer(() => { void tryAutoStartScene2(); }, 650);
-    }
-
-    if (!startedRef.current) {
-      startedRef.current = true;
-      addTimer(() => startMainBirthday(cw, ch), 450);
-    }
+    // Tampilkan petunjuk "tap" - kembang api menunggu tap pertama
+    addTimer(() => setHintMode("start"), 500);
 
     let last = performance.now();
     const loop = (now: number) => {
@@ -858,29 +837,53 @@ export default function FireworkScene() {
       ro.disconnect();
       clearTimers();
       startedRef.current = false; // agar scene bisa diputar ulang
+      musicStartedRef.current = false;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [active]);
 
-  // TAP = tembakkan wish baru tepat di titik yang disentuh
-  const handleTap = (e: RPointerEvent<HTMLElement>) => {
+  // TAP pertama = mulai (HAPPY BIRTHDAY). Tap berikutnya = wish baru di titik yang disentuh.
+  const handleTap = (_e: RPointerEvent<HTMLElement>) => {
     if (!active) return;
-    const st = stateRef.current;
-    if (st < FWState.MAIN_TEXT || st >= FWState.FINAL_LAUNCH) return;
-    if (!wishes.length) return;
-    const now = performance.now();
-    if (now - lastTapRef.current < 220) return;
-    lastTapRef.current = now;
-
     const container = containerRef.current;
     if (!container) return;
+    const now = performance.now();
+    // Jeda minimum antar tap = 1 detik (membatasi overlap kembang api)
+    if (now - lastTapRef.current < TAP_COOLDOWN_MS) return;
+    lastTapRef.current = now;
+
     const rect = container.getBoundingClientRect();
     const cw = rect.width;
     const ch = rect.height;
-    const fx = (e.clientX - rect.left) / cw;
-    const fy = (e.clientY - rect.top) / ch;
+    const st = stateRef.current;
 
-    const item = wishes[tapIdxRef.current % wishes.length] as any;
+    // tap pertama: mulai kembang api utama + musik
+    if (!startedRef.current && st === FWState.IDLE) {
+      startedRef.current = true;
+      if (!musicStartedRef.current) {
+        musicStartedRef.current = true;
+        void tryAutoStartScene2();
+      }
+      setHintMode("off");
+      startMainBirthday(cw, ch);
+      return;
+    }
+
+    if (st < FWState.MAIN_TEXT || st >= FWState.FINAL_LAUNCH) return;
+    if (!wishes.length || tapIdxRef.current >= wishes.length) return;
+    if (st < FWState.WISH_LAUNCH) stateRef.current = FWState.WISH_LAUNCH;
+
+    // Posisi wish ACAK (bukan di titik tap), dijaga agar tidak menumpuk persis di wish sebelumnya
+    let fx = 0.5;
+    let fy = 0.4;
+    for (let k = 0; k < 8; k++) {
+      fx = 0.26 + Math.random() * 0.48; // 26% - 74% lebar
+      fy = 0.24 + Math.random() * 0.46; // 24% - 70% tinggi
+      const last = lastWishPosRef.current;
+      if (!last || Math.hypot((fx - last.x) * cw, (fy - last.y) * ch) > cw * 0.28) break;
+    }
+    lastWishPosRef.current = { x: fx, y: fy };
+    const item = wishes[tapIdxRef.current] as any;
     tapIdxRef.current++;
     const palette = PALETTE_WISH[paletteIdxRef.current++ % PALETTE_WISH.length];
     launchOneFirework(
@@ -888,12 +891,16 @@ export default function FireworkScene() {
       {
         text: item.text,
         position: { x: fx, y: Math.min(0.78, Math.max(0.22, fy)) },
-        launch: { x: 0.5 + (fx - 0.5) * 0.4, y: 0.97 },
+        launch: { x: 0.5 + (fx - 0.5) * 0.5, y: 0.97 },
       },
       palette,
       resolvedCfg.wishes.animation,
       "wish",
+      () => {
+        if (stateRef.current < FWState.WISH_EXPLODE) stateRef.current = FWState.WISH_EXPLODE;
+      },
     );
+    if (tapIdxRef.current >= wishes.length) scheduleFinalAfterLastWish(cw, ch);
   };
 
   const handleSkip = (e: RPointerEvent<HTMLButtonElement>) => {
@@ -926,17 +933,19 @@ export default function FireworkScene() {
           letterSpacing: "0.16em",
           color: "rgba(150,185,255,0.85)",
           textTransform: "uppercase",
-          opacity: active && hintOn ? 1 : 0,
+          opacity: active && hintMode !== "off" ? 1 : 0,
           transition: "opacity 0.8s ease",
           zIndex: 7,
         }}
         aria-hidden
       >
-        <span style={{ color: "#FF9A4A" }}>✦</span> TAP-TAP LAYAR UNTUK WISHES <span style={{ color: "#FF9A4A" }}>✦</span>
+        <span style={{ color: "#FF9A4A" }}>✦</span>{" "}
+        {hintMode === "start" ? "TAP LAYAR UNTUK MULAI" : "TAP-TAP LAYAR UNTUK WISHES"}{" "}
+        <span style={{ color: "#FF9A4A" }}>✦</span>
       </div>
 
       {/* Tombol lewati (kecil, tidak mengganggu) */}
-      {active && hintOn && (
+      {active && hintMode === "wish" && (
         <button
           type="button"
           onPointerDown={handleSkip}
