@@ -4,11 +4,10 @@ import { birthdayConfig } from "../config/birthdayConfig.js";
 import PolaroidStack from "./PolaroidStack";
 
 export default function BirthdayScene() {
-  const { currentScene, goToScene, markPolaroidDone, tryAutoStartScene2 } = useStory();
-  const active = currentScene === 2;
+  const { currentScene, goToScene, markPolaroidDone } = useStory();
+  const active = currentScene === 3;
   const [phase, setPhase] = useState(0);
   const [isAutoAdvanceReady, setIsAutoAdvanceReady] = useState(false);
-  const startedRef = useRef(false);
 
   useEffect(() => {
     if (!active) return;
@@ -17,16 +16,12 @@ export default function BirthdayScene() {
     const t1 = window.setTimeout(() => setPhase(1), 500);
     const t2 = window.setTimeout(() => setPhase(2), 1400);
     const t3 = window.setTimeout(() => setPhase(3), 2300);
-    if (!startedRef.current) {
-      startedRef.current = true;
-      void tryAutoStartScene2();
-    }
     return () => {
       window.clearTimeout(t1);
       window.clearTimeout(t2);
       window.clearTimeout(t3);
     };
-  }, [active, tryAutoStartScene2]);
+  }, [active]);
 
   const onPolaroidComplete = () => {
     markPolaroidDone();
@@ -35,7 +30,7 @@ export default function BirthdayScene() {
 
   useEffect(() => {
     if (!active || !isAutoAdvanceReady) return;
-    const t = window.setTimeout(() => goToScene(3, 400), 900);
+    const t = window.setTimeout(() => goToScene(4, 400), 900);
     return () => window.clearTimeout(t);
   }, [active, isAutoAdvanceReady, goToScene]);
 

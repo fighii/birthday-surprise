@@ -5,7 +5,7 @@ import { photos as photoFallback, timelinePhotos as timelineList } from "../conf
 
 export default function TimelineScene() {
   const { currentScene, goToScene } = useStory();
-  const active = currentScene === 5;
+  const active = currentScene === 6;
   const [revealed, setRevealed] = useState<Set<number>>(new Set());
   const [titleShown, setTitleShown] = useState(false);
   const items = birthdayConfig.timeline;
@@ -43,7 +43,7 @@ export default function TimelineScene() {
   useEffect(() => {
     if (!active) return;
     if (revealed.size < items.length) return;
-    const t = window.setTimeout(() => goToScene(6, 300), 2400);
+    const t = window.setTimeout(() => goToScene(7, 300), 2400);
     return () => window.clearTimeout(t);
   }, [active, revealed.size, items.length, goToScene]);
 
@@ -133,7 +133,7 @@ export default function TimelineScene() {
 
         <button
           className="btn-secondary"
-          onClick={() => goToScene(6, 250)}
+          onClick={() => goToScene(7, 250)}
         >
           Continue →
         </button>

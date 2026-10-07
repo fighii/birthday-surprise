@@ -23,68 +23,36 @@
 // 1. FOTO KHUSUS SCENE 2 POLAROID STACK (30 foto — pakai 30 foto pertama list alfabetis)
 // ------------------------------
 export const polaroidPhotos = [
-  "/assets/photos/AZRQ4276.JPG",
-  "/assets/photos/BUSQ0897.JPG",
-  "/assets/photos/CCBZ2708.JPG",
-  // "/assets/photos/CIGB7714.JPG",
-  // "/assets/photos/EFDQ6684.JPG",
-  // "/assets/photos/EGDY8312.JPG",
-  // "/assets/photos/FPER2019.JPG",
-  // "/assets/photos/GHYK0878.JPG",
-  // "/assets/photos/GODD2903.JPG",
-  // "/assets/photos/GYCJ4002.JPG",
-  // "/assets/photos/HNAO8111.JPG",
-  // "/assets/photos/IMG_4142.JPG",
-  // "/assets/photos/IMG_4170.JPG",
-  // "/assets/photos/IMG_4215.JPG",
-  // "/assets/photos/IMG_4219.JPG",
-  // "/assets/photos/IMG_4244.JPG",
-  // "/assets/photos/IMG_6769.JPG",
-  // "/assets/photos/IMG_6770.JPG",
-  // "/assets/photos/IMG_7223.JPG",
-  // "/assets/photos/IMG_7226.JPG",
-  // "/assets/photos/IMG_E4120.JPG",
-  // "/assets/photos/IMG_E4143.JPG",
-  // "/assets/photos/IMG_E4144.JPG",
-  // "/assets/photos/IMG_E4146.JPG",
-  // "/assets/photos/IMG_E4149.JPG",
-  // "/assets/photos/IMG_E4170.JPG",
-  // "/assets/photos/IMG_E4179.JPG",
-  // "/assets/photos/IMG_E4181.JPG",
-  // "/assets/photos/IMG_E4215.JPG",
-  // "/assets/photos/IMG_E4216.JPG",
-  // "/assets/photos/IMG_E4219.JPG",
-  // "/assets/photos/IMG_E4220.JPG",
-  // "/assets/photos/IMG_E4271.JPG",
-  // "/assets/photos/IMG_E4275.JPG",
-  // "/assets/photos/IMG_E6769.JPG",
-  // "/assets/photos/IMG_E6770.JPG",
-  // "/assets/photos/IMG_E7226.JPG",
-  // "/assets/photos/IMG_E7258.JPG",
-  // "/assets/photos/IMG_E7259.JPG",
-  // "/assets/photos/IMG_E7268.JPG",
-  // "/assets/photos/IMG_E7272.JPG",
-  // "/assets/photos/IOJA3145.JPG",
-  // "/assets/photos/IOKL4641.JPG",
-  // "/assets/photos/JAOF9360.JPG",
-  // "/assets/photos/KJUH1172.JPG",
-  // "/assets/photos/LJQR7381.JPG",
-  // "/assets/photos/LXDC8607.JPG",
-  // "/assets/photos/MSNS3324.JPG",
-  // "/assets/photos/MZEY1232.JPG",
-  // "/assets/photos/photo01.JPG",
-  // "/assets/photos/photo02.JPG",
-  // "/assets/photos/photo03.JPG",
-  // "/assets/photos/RSTV8715.JPG",
-  // "/assets/photos/TBEG0155.JPG",
-  // "/assets/photos/TLGJ9655.JPG",
-  // "/assets/photos/VAGX7686.JPG",
-  // "/assets/photos/VBKM0210.JPG",
-  // "/assets/photos/VEVG0626.JPG",
-  // "/assets/photos/XGZG6390.JPG",
-  // "/assets/photos/XIIQ0452.JPG",
-  // "/assets/photos/XWTF8228.JPG",
-  // "/assets/photos/YCUZ7548.JPG",
+  "/assets/photos/photo01.jpeg",
+  "/assets/photos/photo02.jpeg",
+  "/assets/photos/photo03.jpeg",
+  "/assets/photos/photo04.jpeg",
+  "/assets/photos/photo05.jpeg",
+  "/assets/photos/photo06.jpeg",
+  "/assets/photos/photo07.jpeg",
+  "/assets/photos/photo08.jpeg",
+  "/assets/photos/photo09.jpeg",
+  "/assets/photos/photo10.jpeg",
+  "/assets/photos/photo11.jpeg",
+  "/assets/photos/photo12.jpeg",
+  "/assets/photos/photo13.jpeg",
+  "/assets/photos/photo14.jpeg",
+  "/assets/photos/photo15.jpeg",
+  "/assets/photos/photo16.jpeg",
+  "/assets/photos/photo17.jpeg",
+  "/assets/photos/photo18.jpeg",
+  "/assets/photos/photo19.jpeg",
+  "/assets/photos/photo20.jpeg",
+  "/assets/photos/photo21.jpeg",
+  "/assets/photos/photo22.jpeg",
+  "/assets/photos/photo23.jpeg",
+  "/assets/photos/photo24.jpeg",
+  "/assets/photos/photo25.jpeg",
+  "/assets/photos/photo26.jpeg",
+  "/assets/photos/photo27.jpeg",
+  "/assets/photos/photo28.jpeg",
+  "/assets/photos/photo29.jpeg",
+  "/assets/photos/photo30.jpeg",
 ];
 
 // ------------------------------
@@ -93,7 +61,7 @@ export const polaroidPhotos = [
 // Pakai foto PALING SPESIAL (pertama ketemu / first date)
 // Default: pakai IMG_4142.JPG (pertama alfabetis IMG_ foto pertama Anda; bisa ganti kapan saja)
 export const firstMemoryPhoto = [
-  "/assets/photos/IMG_4142.JPG",
+  "/assets/photos/firstmemoryphoto.JPG",
 ];
 
 // ------------------------------
@@ -101,14 +69,16 @@ export const firstMemoryPhoto = [
 // ------------------------------
 // Pilih 8 foto terbaru untuk story style
 export const photoStoryPhotos = [
-  "/assets/photos/photo01.JPG",
-  "/assets/photos/photo02.JPG",
-  "/assets/photos/photo03.JPG",
-  "/assets/photos/IMG_7226.JPG",
-  "/assets/photos/IMG_E7226.JPG",
-  "/assets/photos/IMG_E7258.JPG",
-  "/assets/photos/IMG_E7259.JPG",
-  "/assets/photos/YCUZ7548.JPG",
+  "/assets/photos/photostory01.JPG",
+  "/assets/photos/photostory02.JPG",
+  "/assets/photos/photostory03.JPG",
+  "/assets/photos/photostory04.JPG",
+  "/assets/photos/photostory05.JPG",
+  "/assets/photos/photostory06.JPG",
+  "/assets/photos/photostory07.JPG",
+  "/assets/photos/photostory08.JPG",
+  "/assets/photos/photostory09.JPG",
+  "/assets/photos/photostory10.JPG",
 ];
 
 // ------------------------------
@@ -116,11 +86,11 @@ export const photoStoryPhotos = [
 // ------------------------------
 // Urutan default: 5 foto pertama setiap tahap (Anda bisa ganti kapan saja)
 export const timelinePhotos = [
-  "/assets/photos/IMG_4142.JPG",      // Tahap 1: Pertama ketemu
-  "/assets/photos/IMG_4170.JPG",      // Tahap 2: Pertama chat / deketan
-  "/assets/photos/IMG_4215.JPG",      // Tahap 3: First date
-  "/assets/photos/IMG_6769.JPG",      // Tahap 4: Anniversary / kenangan manis
-  "/assets/photos/YCUZ7548.JPG",      // Tahap 5: Terbaru (still going strong)
+  "/assets/photos/timeline01.JPG",      // Tahap 1: Pertama ketemu
+  "/assets/photos/timeline02.JPG",      // Tahap 2: Pertama chat / deketan
+  "/assets/photos/timeline03.JPG",      // Tahap 3: First date
+  "/assets/photos/timeline04.JPG",      // Tahap 4: Anniversary / kenangan manis
+  "/assets/photos/timeline05.JPG",      // Tahap 5: Terbaru (still going strong)
 ];
 
 // ------------------------------
@@ -128,9 +98,9 @@ export const timelinePhotos = [
 // ------------------------------
 // Diisi OTOMATIS 63 foto asli (full backup jika salah satu array di atas dihapus / dikosongkan)
 export const photos = [
-  "/assets/photos/AZRQ4276.JPG",
-  "/assets/photos/BUSQ0897.JPG",
-  "/assets/photos/CCBZ2708.JPG",
+  // "/assets/photos/AZRQ4276.JPG",
+  // "/assets/photos/BUSQ0897.JPG",
+  // "/assets/photos/CCBZ2708.JPG",
   // "/assets/photos/CIGB7714.JPG",
   // "/assets/photos/EFDQ6684.JPG",
   // "/assets/photos/EGDY8312.JPG",
@@ -193,11 +163,48 @@ export const photos = [
 ];
 
 export const videos = [
-  "/assets/videos/video01-compressed.mp4",
+  "/assets/videos/video01.mp4",
 ];
 
 // Musik Anda di folder assets/music/our-song.mp3 (✅ 100% match case)
 export const music = {
   src: "/assets/music/our-song.mp3",
   title: "Our Song",
+};
+
+// ------------------------------
+// 5. SCENE BARU: Firework & Wishes (Scene 2 — sebelum Polaroid)
+// ------------------------------
+// Semua teks wishes & timing bisa diubah DISINI TANPA sentuh kode animasi.
+// Tambah / kurangi array wishes sesuai keinginan.
+export const fireworkConfig = {
+  enabled: true,
+
+  // Kembang API UTAMA di AWAL scene (sebelum wishes)
+  mainBirthday: {
+    text: "HAPPY BIRTHDAY",
+    launchDuration: 1800,
+    explosionDelay: 300,
+    displayDuration: 2800,
+  },
+
+  // WISHES = 1 kembang api per item. TAMBAH / KURANGI array ini SESUKA HATI!
+  wishes: [
+    "WISH YOU ALL THE BEST",
+    "SEHAT SELALU",
+    "DIPENUHI CINTA",
+    "SEMOGA SEMUA IMPIANMU TERWUJUD",
+    "SELALU DIBERIKAN KEBAHAGIAAN",
+    "SEMOGA LANGKAHMU SELALU DIMUDAHKAN",
+    "SEMOGA KITA SELALU BERSAMA",
+  ],
+
+  // Jeda antar wish (ms) — setelah wish Fade OUT, berapa lama sebelum rocket next wish launch
+  wishInterval: 2200,
+
+  // Kembang api TERAKHIR (SETELAH semua wishes selesai)
+  ending: {
+    text: "HAPPY BIRTHDAY, MY LOVE",
+    duration: 3000,
+  },
 };

@@ -5,7 +5,7 @@ import { photos as photoFallback, firstMemoryPhoto as firstMemoryList } from "..
 
 export default function FirstMemoryScene() {
   const { currentScene, goToScene } = useStory();
-  const active = currentScene === 3;
+  const active = currentScene === 4;
   const [phase, setPhase] = useState(0);
   const [errored, setErrored] = useState(false);
 
@@ -31,7 +31,7 @@ export default function FirstMemoryScene() {
 
   useEffect(() => {
     if (!active || phase < 3) return;
-    const t = window.setTimeout(() => goToScene(4, 300), 1500);
+    const t = window.setTimeout(() => goToScene(5, 300), 1500);
     return () => window.clearTimeout(t);
   }, [active, phase, goToScene]);
 
@@ -111,7 +111,7 @@ export default function FirstMemoryScene() {
           className={`btn-secondary transition-all duration-700 ${
             phase >= 3 ? "opacity-100 translate-y-0" : "opacity-0 translate-y-3 pointer-events-none"
           }`}
-          onClick={() => goToScene(4, 250)}
+          onClick={() => goToScene(5, 250)}
           aria-label="Continue to story"
         >
           Continue →

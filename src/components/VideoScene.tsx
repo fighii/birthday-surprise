@@ -5,7 +5,7 @@ import { videos as videoList } from "../config/media.js";
 
 export default function VideoScene() {
   const { currentScene, goToScene, duckMusicOn, duckMusicOff } = useStory();
-  const active = currentScene === 6;
+  const active = currentScene === 7;
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const [phase, setPhase] = useState(0);
   const video = videoList && videoList[0];
@@ -138,7 +138,7 @@ export default function VideoScene() {
 
         <button
           className="btn-secondary transition-opacity duration-700"
-          onClick={() => goToScene(7, 300)}
+          onClick={() => goToScene(8, 300)}
         >
           One last thing →
         </button>

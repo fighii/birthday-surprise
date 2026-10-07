@@ -4,7 +4,7 @@ import { birthdayConfig } from "../config/birthdayConfig.js";
 
 export default function BuildUp() {
   const { currentScene, goToScene } = useStory();
-  const active = currentScene === 8;
+  const active = currentScene === 9;
   const [phase, setPhase] = useState(0);
   const [glow, setGlow] = useState(false);
   const lines = birthdayConfig.buildUpLines;
@@ -26,7 +26,7 @@ export default function BuildUp() {
   const onYes = () => {
     setGlow(true);
     // build up cinematic pause
-    window.setTimeout(() => goToScene(9, 250), 900);
+    window.setTimeout(() => goToScene(10, 250), 900);
   };
 
   return (

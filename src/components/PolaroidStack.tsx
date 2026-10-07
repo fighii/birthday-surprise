@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { photos as photoFallback, polaroidPhotos as polaroidPhotoList } from "../config/media.js";
+import { polaroidPhotos as photoFallback, polaroidPhotos as polaroidPhotoList } from "../config/media.js";
 import {
   birthdayConfig,
   polaroidRotations,

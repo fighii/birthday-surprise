@@ -4,7 +4,7 @@ import { birthdayConfig } from "../config/birthdayConfig.js";
 
 export default function LoveLetter() {
   const { currentScene, goToScene } = useStory();
-  const active = currentScene === 7;
+  const active = currentScene === 8;
   const [open, setOpen] = useState(false);
   const [revealIdx, setRevealIdx] = useState(0);
   const [phase, setPhase] = useState(0);
@@ -33,7 +33,7 @@ export default function LoveLetter() {
   useEffect(() => {
     if (!active || !open) return;
     if (revealIdx < paragraphs.length) return;
-    const t = window.setTimeout(() => goToScene(8, 400), 4200);
+    const t = window.setTimeout(() => goToScene(9, 400), 4200);
     return () => window.clearTimeout(t);
   }, [active, open, revealIdx, paragraphs.length, goToScene]);
 
@@ -109,7 +109,7 @@ export default function LoveLetter() {
 
             {revealIdx >= paragraphs.length && (
               <div className="mt-8 mb-4 flex justify-end sticky bottom-0">
-                <button className="btn-secondary" onClick={() => goToScene(8, 300)}>
+                <button className="btn-secondary" onClick={() => goToScene(9, 300)}>
                   Continue →
                 </button>
               </div>

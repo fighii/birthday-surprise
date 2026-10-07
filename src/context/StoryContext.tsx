@@ -9,10 +9,11 @@ import {
   type ReactNode,
 } from "react";
 
-export type SceneId = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9;
+export type SceneId = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10;
 
 type SceneMood =
   | "opening"
+  | "night"
   | "warm"
   | "memory"
   | "bright"
@@ -54,14 +55,15 @@ const StoryContext = createContext<StoryContextValue | null>(null);
 
 const SCENE_MOOD: Record<SceneId, SceneMood> = {
   1: "opening",
-  2: "warm",
-  3: "memory",
-  4: "bright",
-  5: "cinematic",
-  6: "darker",
-  7: "romantic",
-  8: "veryDark",
-  9: "reveal",
+  2: "night",
+  3: "warm",
+  4: "memory",
+  5: "bright",
+  6: "cinematic",
+  7: "darker",
+  8: "romantic",
+  9: "veryDark",
+  10: "reveal",
 };
 
 const DEFAULT_MUSIC_VOLUME = 0.78;

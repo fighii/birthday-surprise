@@ -5,6 +5,13 @@ const moodStyles: Record<
   string,
   { bg: string; glowA: string; glowB: string; opacity: number; blur: number }
 > = {
+  night: {
+    bg: "radial-gradient(ellipse at 50% 15%, #140a24 0%, #0a0418 45%, #05010c 80%, #020005 100%)",
+    glowA: "rgba(120, 90, 255, 0.10)",
+    glowB: "rgba(255, 150, 180, 0.08)",
+    opacity: 0.22,
+    blur: 0.1,
+  },
   opening: {
     bg: "radial-gradient(ellipse at 50% 40%, #1a0f2e 0%, #0a0612 55%, #050208 100%)",
     glowA: "rgba(255, 107, 157, 0.18)",

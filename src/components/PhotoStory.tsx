@@ -6,7 +6,7 @@ const SEGMENT_DURATION = 5000;
 
 export default function PhotoStory() {
   const { currentScene, goToScene } = useStory();
-  const active = currentScene === 4;
+  const active = currentScene === 5;
   const photos = useMemo(() => {
     const specific = (storyPhotoList || []).filter((p: string) => typeof p === "string" && p.length > 0);
     if (specific.length > 0) return specific;
@@ -27,7 +27,7 @@ export default function PhotoStory() {
     setIndex((i) => {
       if (i >= count - 1) {
         // trigger next scene
-        window.setTimeout(() => goToScene(5, 300), 400);
+        window.setTimeout(() => goToScene(6, 300), 400);
         return i;
       }
       return i + 1;
@@ -180,7 +180,7 @@ export default function PhotoStory() {
           className="absolute bottom-[max(3.5rem,env(safe-area-inset-bottom))] right-4 btn-secondary z-30"
           onClick={(e) => {
             e.stopPropagation();
-            goToScene(5, 250);
+            goToScene(6, 250);
           }}
         >
           Skip to timeline →

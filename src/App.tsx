@@ -2,6 +2,7 @@ import { StoryProvider, useStory, type SceneId } from "./context/StoryContext";
 import CinematicBackground from "./components/CinematicBackground";
 import MusicPlayer from "./components/MusicPlayer";
 import OpeningScene from "./components/OpeningScene";
+import FireworkScene from "./components/FireworkScene";
 import BirthdayScene from "./components/BirthdayScene";
 import FirstMemoryScene from "./components/FirstMemoryScene";
 import PhotoStory from "./components/PhotoStory";
@@ -15,14 +16,15 @@ function Stage() {
   const { currentScene, isTransitioning } = useStory();
   const scenes: { id: SceneId; Comp: React.ComponentType }[] = [
     { id: 1, Comp: OpeningScene },
-    { id: 2, Comp: BirthdayScene },
-    { id: 3, Comp: FirstMemoryScene },
-    { id: 4, Comp: PhotoStory },
-    { id: 5, Comp: TimelineScene },
-    { id: 6, Comp: VideoScene },
-    { id: 7, Comp: LoveLetter },
-    { id: 8, Comp: BuildUp },
-    { id: 9, Comp: FinalSurprise },
+    { id: 2, Comp: FireworkScene },
+    { id: 3, Comp: BirthdayScene },
+    { id: 4, Comp: FirstMemoryScene },
+    { id: 5, Comp: PhotoStory },
+    { id: 6, Comp: TimelineScene },
+    { id: 7, Comp: VideoScene },
+    { id: 8, Comp: LoveLetter },
+    { id: 9, Comp: BuildUp },
+    { id: 10, Comp: FinalSurprise },
   ];
 
   return (
