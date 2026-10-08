@@ -13,6 +13,8 @@ export default function VideoScene() {
   const reduce = usePrefersReducedMotion();
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const [phase, setPhase] = useState(0);
+  const [blocked, setBlocked] = useState(false);
+  const [videoError, setVideoError] = useState(false);
   const video = videoList && videoList[0];
   const duckDoneRef = useRef<"idle" | "on" | "off">("idle");
 
@@ -23,6 +25,8 @@ export default function VideoScene() {
       void duckMusicOn();
     }
     setPhase(0);
+    setBlocked(false);
+    setVideoError(false);
     const t1 = window.setTimeout(() => setPhase(1), 400);
     const t2 = window.setTimeout(() => setPhase(2), 1200);
     return () => {
@@ -71,14 +75,21 @@ export default function VideoScene() {
             await p2;
           }
         } catch {
+          // browser menolak suara tanpa gesture -> lanjutkan tanpa suara
           v.muted = true;
+          try {
+            await v.play();
+          } catch {
+            setBlocked(true);
+          }
         }
       } catch {
         try {
           v.muted = true;
-          void v.play();
+          const pp = v.play();
+          if (pp && typeof pp.catch === "function") pp.catch(() => setBlocked(true));
         } catch {
-          /* noop */
+          setBlocked(true);
         }
       }
     };
@@ -131,7 +142,7 @@ export default function VideoScene() {
             style={{ left: -8, bottom: 14, zIndex: 3, animation: reduce ? undefined : "vsBob 5s ease-in-out 1s infinite" }}
           />
 
-          {video ? (
+          {video && !videoError ? (
             <PaperFrame width="100%" seed={5} rotate={-1} tapeColor="pink" caption="♥ untukmu ♥">
               <div style={{ position: "relative", width: "100%", aspectRatio: "16 / 9" }}>
                 <video
@@ -143,10 +154,28 @@ export default function VideoScene() {
                   disablePictureInPicture
                   controlsList="nodownload nofullscreen noremoteplayback"
                   className="w-full h-full object-contain bg-black select-none pointer-events-none"
-                  poster=""
+                  onError={() => setVideoError(true)}
+                  onPlaying={() => setBlocked(false)}
                   aria-label="Birthday surprise video"
                   draggable={false}
                 />
+                {blocked && (
+                  <div className="absolute inset-0 flex items-center justify-center" style={{ background: "rgba(10,8,34,0.45)" }}>
+                    <PaperButton
+                      variant="primary"
+                      seed={2}
+                      onClick={() => {
+                        const v = videoRef.current;
+                        if (!v) return;
+                        v.muted = false;
+                        void v.play();
+                        setBlocked(false);
+                      }}
+                    >
+                      ▶ Putar video
+                    </PaperButton>
+                  </div>
+                )}
               </div>
             </PaperFrame>
           ) : (
@@ -155,7 +184,9 @@ export default function VideoScene() {
                 <p className="text-romantic" style={{ margin: "0 0 6px", fontSize: 32 }}>
                   Video
                 </p>
-                <p style={{ margin: 0 }}>Your video surprise will appear here ❤️</p>
+                <p style={{ margin: 0 }}>
+                  {video ? `Video tidak bisa dimuat: ${video}` : "Your video surprise will appear here ❤️"}
+                </p>
               </div>
             </PaperNote>
           )}

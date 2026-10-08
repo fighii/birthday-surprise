@@ -6,7 +6,7 @@ import { PaperNote, hash01 } from "./PaperCutout";
 import { PaperButton, PaperFrame } from "./PaperExtras";
 import AssetImage from "./AssetImage";
 
-const SEGMENT_DURATION = 5000;
+const SEGMENT_DURATION = 2000;
 const PROGRESS_STEPS = 10; // progres bergerak per kotak (pixel), bukan mulus
 
 export default function PhotoStory() {

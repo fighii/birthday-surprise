@@ -16,36 +16,36 @@
 // 1. FOTO KHUSUS SCENE 2 POLAROID STACK (30 foto — pakai 30 foto pertama list alfabetis)
 // ------------------------------
 export const polaroidPhotos = [
-  "/assets/photos/photo01.jpeg",
-  "/assets/photos/photo02.jpeg",
-  "/assets/photos/photo03.jpeg",
-  "/assets/photos/photo04.jpeg",
-  "/assets/photos/photo05.jpeg",
-  "/assets/photos/photo06.jpeg",
-  "/assets/photos/photo07.jpeg",
-  "/assets/photos/photo08.jpeg",
-  "/assets/photos/photo09.jpeg",
-  "/assets/photos/photo10.jpeg",
-  "/assets/photos/photo11.jpeg",
-  "/assets/photos/photo12.jpeg",
-  "/assets/photos/photo13.jpeg",
-  "/assets/photos/photo14.jpeg",
-  "/assets/photos/photo15.jpeg",
-  "/assets/photos/photo16.jpeg",
-  "/assets/photos/photo17.jpeg",
-  "/assets/photos/photo18.jpeg",
-  "/assets/photos/photo19.jpeg",
-  "/assets/photos/photo20.jpeg",
-  "/assets/photos/photo21.jpeg",
-  "/assets/photos/photo22.jpeg",
-  "/assets/photos/photo23.jpeg",
-  "/assets/photos/photo24.jpeg",
-  "/assets/photos/photo25.jpeg",
-  "/assets/photos/photo26.jpeg",
-  "/assets/photos/photo27.jpeg",
-  "/assets/photos/photo28.jpeg",
-  "/assets/photos/photo29.jpeg",
-  "/assets/photos/photo30.jpeg",
+  "/assets/photos/polaroidStack/photo01.jpeg",
+  "/assets/photos/polaroidStack/photo02.jpeg",
+  "/assets/photos/polaroidStack/photo03.jpeg",
+  "/assets/photos/polaroidStack/photo04.jpeg",
+  "/assets/photos/polaroidStack/photo05.jpeg",
+  "/assets/photos/polaroidStack/photo06.jpeg",
+  "/assets/photos/polaroidStack/photo07.jpeg",
+  "/assets/photos/polaroidStack/photo08.jpeg",
+  "/assets/photos/polaroidStack/photo09.jpeg",
+  "/assets/photos/polaroidStack/photo10.jpeg",
+  "/assets/photos/polaroidStack/photo11.jpeg",
+  "/assets/photos/polaroidStack/photo12.jpeg",
+  "/assets/photos/polaroidStack/photo13.jpeg",
+  "/assets/photos/polaroidStack/photo14.jpeg",
+  "/assets/photos/polaroidStack/photo15.jpeg",
+  "/assets/photos/polaroidStack/photo16.jpeg",
+  "/assets/photos/polaroidStack/photo17.jpeg",
+  "/assets/photos/polaroidStack/photo18.jpeg",
+  "/assets/photos/polaroidStack/photo19.jpeg",
+  "/assets/photos/polaroidStack/photo20.jpeg",
+  "/assets/photos/polaroidStack/photo21.jpeg",
+  "/assets/photos/polaroidStack/photo22.jpeg",
+  "/assets/photos/polaroidStack/photo23.jpeg",
+  "/assets/photos/polaroidStack/photo24.jpeg",
+  "/assets/photos/polaroidStack/photo25.jpeg",
+  "/assets/photos/polaroidStack/photo26.jpeg",
+  "/assets/photos/polaroidStack/photo27.jpeg",
+  "/assets/photos/polaroidStack/photo28.jpeg",
+  "/assets/photos/polaroidStack/photo29.jpeg",
+  "/assets/photos/polaroidStack/photo30.jpeg",
 ];
  
 // ------------------------------
@@ -54,7 +54,7 @@ export const polaroidPhotos = [
 // Pakai foto PALING SPESIAL (pertama ketemu / first date)
 // Default: pakai IMG_4142.JPG (pertama alfabetis IMG_ foto pertama Anda; bisa ganti kapan saja)
 export const firstMemoryPhoto = [
-  "/assets/photos/firstmemoryphoto.JPG",
+  "/assets/photos/firstMemory/firstmemoryphoto.jpeg",
 ];
  
 // ------------------------------
@@ -62,16 +62,16 @@ export const firstMemoryPhoto = [
 // ------------------------------
 // Pilih 8 foto terbaru untuk story style
 export const photoStoryPhotos = [
-  "/assets/photos/photostory01.JPG",
-  "/assets/photos/photostory02.JPG",
-  "/assets/photos/photostory03.JPG",
-  "/assets/photos/photostory04.JPG",
-  "/assets/photos/photostory05.JPG",
-  "/assets/photos/photostory06.JPG",
-  "/assets/photos/photostory07.JPG",
-  "/assets/photos/photostory08.JPG",
-  "/assets/photos/photostory09.JPG",
-  "/assets/photos/photostory10.JPG",
+  "/assets/photos/photoStory/photostory01.jpeg",
+  "/assets/photos/photoStory/photostory02.jpeg",
+  "/assets/photos/photoStory/photostory03.jpeg",
+  "/assets/photos/photoStory/photostory04.jpeg",
+  "/assets/photos/photoStory/photostory05.jpeg",
+  "/assets/photos/photoStory/photostory06.jpeg",
+  "/assets/photos/photoStory/photostory07.jpeg",
+  "/assets/photos/photoStory/photostory08.jpeg",
+  "/assets/photos/photoStory/photostory09.jpeg",
+  "/assets/photos/photoStory/photostory10.jpeg",
 ];
  
 // ------------------------------
@@ -93,7 +93,7 @@ export const timelinePhotos = [
 export const photos = []; // fallback umum (opsional): isi path foto jika array scene-spesifik kosong
  
 export const videos = [
-  "/assets/videos/video01.mp4",
+  "/assets/videos/video01.MOV"
 ];
  
 // Musik Anda di folder assets/music/our-song.mp3 (✅ 100% match case)
@@ -141,7 +141,7 @@ export const fireworkConfig = {
     // Safe area posisi: y 0.18 ... 0.70, x 0.16 ... 0.84
     items: [
       {
-        text: "WISH YOU ALL THE BEST",
+        text: "WISH YOU ALL THE BESTTT",
         position: { x: 0.50, y: 0.22 }, // TENGAH ATAS
         launch:   { x: 0.50, y: 0.95 }  // mulai dari tengah bawah
       },
@@ -208,7 +208,7 @@ export const loveLetterSidePhotos = [
 // Foto di BELAKANG hati pixel (Final Surprise), maks 5.
 // Jika kosong, otomatis memakai 3 foto pertama dari polaroidPhotos.
 export const finalHeartPhotos = [
-  "/assets/photos/heart01.JPG",
+  "/assets/photos/heart/heart01.JPG",
   // "/assets/photos/heart02.JPG",
   // "/assets/photos/heart03.JPG",
 ];
@@ -216,7 +216,7 @@ export const finalHeartPhotos = [
 // Foto saat EASTER EGG muncul (tap hati 5x). Rekomendasi: 4 PNG cut-out (latar transparan).
 // 2 foto di atas teks, 2 foto di bawah teks, saling overlap.
 export const easterEggPhotos = [
-  "/assets/photos/egg01.png",
+  "/assets/photos/easterEgg/egg01.png",
   // "/assets/photos/egg02.png",
   // "/assets/photos/egg03.png",
   // "/assets/photos/egg04.png",
