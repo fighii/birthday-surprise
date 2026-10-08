@@ -184,9 +184,6 @@ export default function FireworkScene() {
             };
           })
           .filter(Boolean);
-      } else if (Array.isArray(rawWishes._legacyList) && rawWishes._legacyList.length > 0) {
-        items = fromStrings(rawWishes._legacyList.map(String).filter(Boolean));
-        if (typeof rawWishes._legacyInterval === "number") interval = rawWishes._legacyInterval;
       }
     }
 

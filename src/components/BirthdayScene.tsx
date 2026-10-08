@@ -1,13 +1,19 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useStory } from "../context/StoryContext";
 import { birthdayConfig } from "../config/birthdayConfig.js";
+import { WISH_PALETTE } from "../config/sceneTheme";
 import PolaroidStack from "./PolaroidStack";
+import { CutoutText, PaperNote, PaperSticker } from "./PaperCutout";
+import { PixelBurstLayer, usePrefersReducedMotion } from "./PaperExtras";
+import type { PixelBurstHandle } from "./PaperExtras";
 
 export default function BirthdayScene() {
-  const { currentScene, goToScene, markPolaroidDone } = useStory();
+  const { currentScene, goToScene } = useStory();
   const active = currentScene === 3;
+  const reduce = usePrefersReducedMotion();
   const [phase, setPhase] = useState(0);
   const [isAutoAdvanceReady, setIsAutoAdvanceReady] = useState(false);
+  const burstRef = useRef<PixelBurstHandle | null>(null);
 
   useEffect(() => {
     if (!active) return;
@@ -24,7 +30,6 @@ export default function BirthdayScene() {
   }, [active]);
 
   const onPolaroidComplete = () => {
-    markPolaroidDone();
     setIsAutoAdvanceReady(true);
   };
 
@@ -34,53 +39,83 @@ export default function BirthdayScene() {
     return () => window.clearTimeout(t);
   }, [active, isAutoAdvanceReady, goToScene]);
 
+  // setiap kartu mendarat -> percikan kembang api pixel kecil
+  const onLand = useCallback(
+    (info: { x: number; y: number; index: number }) => {
+      if (reduce) return;
+      burstRef.current?.burst(info.x, info.y, WISH_PALETTE[info.index % WISH_PALETTE.length], 0.7);
+    },
+    [reduce],
+  );
+
+  const fade = (on: boolean, dy: number) => ({
+    opacity: on ? 1 : 0,
+    transform: on ? "translateY(0)" : `translateY(${dy}px)`,
+    transition: "opacity 900ms ease, transform 900ms ease",
+  });
+
   return (
     <section
       className={`scene-layer ${active ? "scene-active" : "scene-hidden"}`}
       aria-hidden={!active}
       style={{ justifyContent: "flex-start", paddingTop: "max(3rem, env(safe-area-inset-top))" }}
     >
+      {active && <PixelBurstLayer ref={burstRef} zIndex={30} />}
+
       <div
         className="relative w-full max-w-xl mx-auto flex flex-col items-center text-center gap-3 px-3 pt-4 pointer-events-none select-none"
         style={{
           zIndex: 1,
           position: "relative",
-          background:
-            "linear-gradient(to bottom, rgba(10,6,18,0.0) 0%, rgba(10,6,18,0.0) 24%, rgba(10,6,18,0.9) 70%, rgba(10,6,18,0.98) 100%)",
-          WebkitMaskImage:
-            "linear-gradient(to bottom, #000 0%, #000 78%, rgba(0,0,0,0.2) 90%, transparent 100%)",
-          maskImage:
-            "linear-gradient(to bottom, #000 0%, #000 78%, rgba(0,0,0,0.2) 90%, transparent 100%)",
-          paddingBottom: "2.2rem",
+          paddingBottom: "0.5rem",
         }}
       >
-        <h1
-          className={`text-3xl sm:text-4xl md:text-5xl text-white transition-all duration-[900ms] pointer-events-auto ${
-            phase >= 1 ? "opacity-100 translate-y-0" : "opacity-0 translate-y-5"
-          }`}
-        >
-          <span className="text-romantic text-cinematic-gold" style={{ fontSize: "1.3em" }}>
-            {birthdayConfig.birthdayMessage}
-          </span>
+        <PaperSticker
+          kind="star"
+          color="#FFD84A"
+          size={30}
+          rotate={-14}
+          style={{ left: "3%", top: 0, opacity: phase >= 1 ? 1 : 0, transition: "opacity 900ms ease 400ms" }}
+        />
+        <PaperSticker
+          kind="heart"
+          color="#ff7fae"
+          size={28}
+          rotate={12}
+          style={{ right: "4%", top: 4, opacity: phase >= 1 ? 1 : 0, transition: "opacity 900ms ease 600ms" }}
+        />
+
+        <h1 style={{ margin: 0 }}>
+          <CutoutText
+            text={birthdayConfig.birthdayMessage}
+            fontSize="clamp(28px, 8.6vw, 40px)"
+            seed={11}
+            show={phase >= 1}
+            stagger={45}
+            reduce={reduce}
+          />
         </h1>
-        <p
-          className={`text-cinematic-soft/80 text-base sm:text-lg transition-all duration-[900ms] pointer-events-auto ${
-            phase >= 2 ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4"
-          }`}
-        >
-          {birthdayConfig.birthdaySubtext}
-        </p>
-        <p
-          className={`text-romantic text-2xl sm:text-3xl text-cinematic-love transition-all duration-[900ms] pointer-events-auto ${
-            phase >= 3 ? "opacity-100 translate-y-0" : "opacity-0 translate-y-5"
-          }`}
-        >
-          {birthdayConfig.polaroidLine}
-        </p>
+
+        <div style={fade(phase >= 2, 16)}>
+          <PaperNote rotate={-1.2} tone="cream" tape={false} seed={6} innerStyle={{ padding: "6px 16px 5px" }}>
+            <p className="text-serif italic" style={{ margin: 0, fontSize: 14, lineHeight: 1.3 }}>
+              {birthdayConfig.birthdaySubtext}
+            </p>
+          </PaperNote>
+        </div>
+
+        <CutoutText
+          text={birthdayConfig.polaroidLine}
+          fontSize="clamp(15px, 4.4vw, 20px)"
+          seed={4}
+          show={phase >= 3}
+          stagger={22}
+          reduce={reduce}
+        />
       </div>
 
-      <div className="w-full flex-1 flex items-center justify-center" style={{ marginTop: "-3.5rem", zIndex: 2, position: "relative" }}>
-        <PolaroidStack onComplete={onPolaroidComplete} active={active} />
+      <div className="w-full flex-1 flex items-center justify-center" style={{ marginTop: "0.25rem", zIndex: 2, position: "relative" }}>
+        <PolaroidStack onComplete={onPolaroidComplete} active={active} onLand={onLand} />
       </div>
 
       <div className="vignette" />

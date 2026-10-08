@@ -8,6 +8,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { birthdayConfig } from "../config/birthdayConfig.js";
 
 export type SceneId = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10;
 
@@ -31,8 +32,6 @@ interface StoryState {
   musicInitialized: boolean;
   musicPlaying: boolean;
   musicNeedsTap: boolean;
-  polaroidDone: boolean;
-  finalDone: boolean;
 }
 
 interface StoryContextValue extends StoryState {
@@ -41,8 +40,6 @@ interface StoryContextValue extends StoryState {
   toggleMusic: () => void;
   setMusicPlaying: (v: boolean) => void;
   setMusicNeedsTap: (v: boolean) => void;
-  markPolaroidDone: () => void;
-  markFinalDone: () => void;
   audioRef: React.MutableRefObject<HTMLAudioElement | null>;
   fadeMusic: (toVolume: number, durationMs: number) => Promise<void>;
   duckMusicOn: () => Promise<void>;
@@ -59,14 +56,14 @@ const SCENE_MOOD: Record<SceneId, SceneMood> = {
   3: "reveal",
   4: "reveal",
   5: "reveal",
-  6: "reveal",
+  6: "night", // Timeline: tanpa nuansa rose di bawah
   7: "reveal",
   8: "reveal",
   9: "reveal",
   10: "reveal",
 };
 
-const DEFAULT_MUSIC_VOLUME = 0.78;
+const DEFAULT_MUSIC_VOLUME = birthdayConfig.music?.volume ?? 0.45;
 const DUCK_DUCKED_VOLUME = 0.20;
 const DUCK_DURATION_OUT = 600;
 const DUCK_DURATION_IN = 1200;
@@ -79,11 +76,11 @@ export function StoryProvider({ children }: { children: ReactNode }) {
   const [musicInitialized, setMusicInitialized] = useState(false);
   const [musicPlaying, setMusicPlaying] = useState(false);
   const [musicNeedsTap, setMusicNeedsTap] = useState(false);
-  const [polaroidDone, setPolaroidDone] = useState(false);
-  const [finalDone, setFinalDone] = useState(false);
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const transitionTimer = useRef<number | null>(null);
+  const sceneTimer = useRef<number | null>(null);
+  const sceneRef = useRef<SceneId>(1);
   const musicVolRef = useRef<number>(DEFAULT_MUSIC_VOLUME);
   const fadeRafRef = useRef<number | null>(null);
   const duckingRef = useRef<"off" | "out" | "on" | "in">("off");
@@ -176,23 +173,22 @@ export function StoryProvider({ children }: { children: ReactNode }) {
 
   const goToScene = useCallback((scene: SceneId, pauseMs = 500) => {
     setIsTransitioning(true);
-    setPrevScene((prev) => prev);
-    if (pauseMs > 0) {
-      window.setTimeout(() => {
-        setPrevScene(currentScene);
-        setCurrentScene(scene);
-        setSceneMood(SCENE_MOOD[scene]);
-      }, pauseMs);
-    } else {
-      setPrevScene(currentScene);
+    // batalkan perpindahan yang masih menunggu supaya klik cepat tidak memicu dua kali
+    if (sceneTimer.current) window.clearTimeout(sceneTimer.current);
+    const apply = () => {
+      sceneTimer.current = null;
+      setPrevScene(sceneRef.current);
+      sceneRef.current = scene;
       setCurrentScene(scene);
       setSceneMood(SCENE_MOOD[scene]);
-    }
+    };
+    if (pauseMs > 0) sceneTimer.current = window.setTimeout(apply, pauseMs);
+    else apply();
     if (transitionTimer.current) window.clearTimeout(transitionTimer.current);
     transitionTimer.current = window.setTimeout(() => {
       setIsTransitioning(false);
     }, 1100 + pauseMs);
-  }, [currentScene]);
+  }, []);
 
   const toggleMusic = useCallback(async () => {
     const audio = audioRef.current;
@@ -215,9 +211,6 @@ export function StoryProvider({ children }: { children: ReactNode }) {
       setMusicNeedsTap(true);
     }
   }, [fadeMusic]);
-
-  const markPolaroidDone = useCallback(() => setPolaroidDone(true), []);
-  const markFinalDone = useCallback(() => setFinalDone(true), []);
 
   useEffect(() => {
     const audio = audioRef.current;
@@ -245,15 +238,11 @@ export function StoryProvider({ children }: { children: ReactNode }) {
       musicInitialized,
       musicPlaying,
       musicNeedsTap,
-      polaroidDone,
-      finalDone,
       goToScene,
       setMusicInitialized,
       toggleMusic,
       setMusicPlaying,
       setMusicNeedsTap,
-      markPolaroidDone,
-      markFinalDone,
       audioRef,
       fadeMusic,
       duckMusicOn,
@@ -269,12 +258,8 @@ export function StoryProvider({ children }: { children: ReactNode }) {
       musicInitialized,
       musicPlaying,
       musicNeedsTap,
-      polaroidDone,
-      finalDone,
       goToScene,
       toggleMusic,
-      markPolaroidDone,
-      markFinalDone,
       fadeMusic,
       duckMusicOn,
       duckMusicOff,

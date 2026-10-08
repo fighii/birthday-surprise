@@ -1,5 +1,6 @@
 import type { CSSProperties, ReactNode } from "react";
 import { FONT_HAND, FONT_LED } from "../config/sceneTheme";
+import AssetImage from "./AssetImage";
 
 // =====================================================================
 // Komponen gaya CUT-OUT PAPER (kertas gunting) untuk tema langit malam + LED
@@ -20,7 +21,7 @@ const GRAIN = `url("data:image/svg+xml;utf8,${encodeURIComponent(
   "<svg xmlns='http://www.w3.org/2000/svg' width='120' height='120'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0.36  0 0 0 0 0.26  0 0 0 0 0.22  0 0 0 1.2 -0.46'/></filter><rect width='120' height='120' filter='url(#n)'/></svg>",
 )}")`;
 
-const paperBg = (color: string): CSSProperties => ({
+export const paperBg = (color: string): CSSProperties => ({
   backgroundColor: color,
   backgroundImage: GRAIN,
   backgroundSize: "120px 120px",
@@ -138,7 +139,7 @@ export function CutoutText({
       }}
     >
       {words.map((w, wi) => (
-        <span key={wi} aria-hidden style={{ display: "inline-flex", whiteSpace: "nowrap" }}>
+        <span key={wi} aria-hidden style={{ display: "inline-flex", whiteSpace: "nowrap", filter: SHADOW_PAPER }}>
           {Array.from(w).map((ch) => {
             const i = li++;
             const k = seed * 13 + i;
@@ -153,7 +154,6 @@ export function CutoutText({
                 style={{
                   display: "inline-block",
                   margin: "0 0.03em",
-                  filter: SHADOW_PAPER,
                   opacity: show ? 1 : 0,
                   transform: show
                     ? `translateY(${dy}em) rotate(${rot}deg)`
@@ -252,6 +252,7 @@ export function TornPhoto({
   tape = true,
   tapeColor = "pink",
   caption,
+  onFail,
   style,
 }: {
   src: string;
@@ -260,6 +261,7 @@ export function TornPhoto({
   tape?: boolean;
   tapeColor?: "pink" | "gold" | "blue";
   caption?: string;
+  onFail?: () => void;
   style?: CSSProperties;
 }) {
   const pad = width * 0.07;
@@ -279,9 +281,10 @@ export function TornPhoto({
           clipPath: tornPolygon(seed, 3.2, 12),
         }}
       >
-        <img
+        <AssetImage
           src={src}
           alt=""
+          onFail={onFail}
           draggable={false}
           style={{
             width: "100%",

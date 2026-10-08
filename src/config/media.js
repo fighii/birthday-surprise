@@ -1,24 +1,17 @@
 // ==========================================
 // MEDIA CONFIG
 // ==========================================
-// Tambahkan path media Anda di sini.
-// Jangan lupa masukkan file ke folder:
-//   /assets/photos/
-//   /assets/videos/
-//   /assets/music/
+// Taruh file di folder public/assets/{photos,videos,music}/ dan tulis path-nya di sini
+// (diawali "/assets/..."). Nama file CASE-SENSITIVE di GitHub Pages.
 //
-// ⚠️ CASE-SENSITIVE! Ekstensi foto Anda = .JPG (huruf BESAR).
-//    Jangan tulis .jpg → GitHub Pages AKAN 404!
-//
-// FOTO DIPISAH BERDASARKAN SCENE (agar bisa diatur masing-masing):
-//   - polaroidPhotos     → Scene 2 Polaroid Montage (30x foto tersebar + stack)
-//   - firstMemoryPhoto   → Scene 3 First Memory (1 foto spesial, slow zoom 9s)
-//   - photoStoryPhotos   → Scene 4 IG Photo Story (semua foto, berurutan story)
-//   - timelinePhotos     → Scene 5 Timeline (5 foto, 1 per tahap kenangan)
-//
-// FALLBACK: Jika salah satu array KOSONG, sistem akan pakai array `photos` di bawah.
+// Foto per scene:
+//   polaroidPhotos   -> Polaroid stack (30 foto)
+//   firstMemoryPhoto -> First Memory (1 foto)
+//   photoStoryPhotos -> Photo Story (berurutan)
+//   timelinePhotos   -> Timeline (1 per tahap)
+// Jika array scene kosong, dipakai array `photos` (fallback umum).
 // ==========================================
-
+ 
 // ------------------------------
 // 1. FOTO KHUSUS SCENE 2 POLAROID STACK (30 foto — pakai 30 foto pertama list alfabetis)
 // ------------------------------
@@ -54,7 +47,7 @@ export const polaroidPhotos = [
   "/assets/photos/photo29.jpeg",
   "/assets/photos/photo30.jpeg",
 ];
-
+ 
 // ------------------------------
 // 2. FOTO KHUSUS SCENE 3 FIRST MEMORY (1 foto spesial)
 // ------------------------------
@@ -63,7 +56,7 @@ export const polaroidPhotos = [
 export const firstMemoryPhoto = [
   "/assets/photos/firstmemoryphoto.JPG",
 ];
-
+ 
 // ------------------------------
 // 3. FOTO KHUSUS SCENE 4 IG PHOTO STORY (tap left/right, auto-advance 5s)
 // ------------------------------
@@ -80,7 +73,7 @@ export const photoStoryPhotos = [
   "/assets/photos/photostory09.JPG",
   "/assets/photos/photostory10.JPG",
 ];
-
+ 
 // ------------------------------
 // 4. FOTO KHUSUS SCENE 5 TIMELINE (5 foto = 5 tahap kenangan)
 // ------------------------------
@@ -92,86 +85,23 @@ export const timelinePhotos = [
   "/assets/photos/timeline04.JPG",      // Tahap 4: Anniversary / kenangan manis
   "/assets/photos/timeline05.JPG",      // Tahap 5: Terbaru (still going strong)
 ];
-
+ 
 // ------------------------------
 // FALLBACK: photos (array umum, jika scene-spesifik array KOSONG)
 // ------------------------------
 // Diisi OTOMATIS 63 foto asli (full backup jika salah satu array di atas dihapus / dikosongkan)
-export const photos = [
-  // "/assets/photos/AZRQ4276.JPG",
-  // "/assets/photos/BUSQ0897.JPG",
-  // "/assets/photos/CCBZ2708.JPG",
-  // "/assets/photos/CIGB7714.JPG",
-  // "/assets/photos/EFDQ6684.JPG",
-  // "/assets/photos/EGDY8312.JPG",
-  // "/assets/photos/FPER2019.JPG",
-  // "/assets/photos/GHYK0878.JPG",
-  // "/assets/photos/GODD2903.JPG",
-  // "/assets/photos/GYCJ4002.JPG",
-  // "/assets/photos/HNAO8111.JPG",
-  // "/assets/photos/IMG_4142.JPG",
-  // "/assets/photos/IMG_4170.JPG",
-  // "/assets/photos/IMG_4215.JPG",
-  // "/assets/photos/IMG_4219.JPG",
-  // "/assets/photos/IMG_4244.JPG",
-  // "/assets/photos/IMG_6769.JPG",
-  // "/assets/photos/IMG_6770.JPG",
-  // "/assets/photos/IMG_7223.JPG",
-  // "/assets/photos/IMG_7226.JPG",
-  // "/assets/photos/IMG_E4120.JPG",
-  // "/assets/photos/IMG_E4143.JPG",
-  // "/assets/photos/IMG_E4144.JPG",
-  // "/assets/photos/IMG_E4146.JPG",
-  // "/assets/photos/IMG_E4149.JPG",
-  // "/assets/photos/IMG_E4170.JPG",
-  // "/assets/photos/IMG_E4179.JPG",
-  // "/assets/photos/IMG_E4181.JPG",
-  // "/assets/photos/IMG_E4215.JPG",
-  // "/assets/photos/IMG_E4216.JPG",
-  // "/assets/photos/IMG_E4219.JPG",
-  // "/assets/photos/IMG_E4220.JPG",
-  // "/assets/photos/IMG_E4271.JPG",
-  // "/assets/photos/IMG_E4275.JPG",
-  // "/assets/photos/IMG_E6769.JPG",
-  // "/assets/photos/IMG_E6770.JPG",
-  // "/assets/photos/IMG_E7226.JPG",
-  // "/assets/photos/IMG_E7258.JPG",
-  // "/assets/photos/IMG_E7259.JPG",
-  // "/assets/photos/IMG_E7268.JPG",
-  // "/assets/photos/IMG_E7272.JPG",
-  // "/assets/photos/IOJA3145.JPG",
-  // "/assets/photos/IOKL4641.JPG",
-  // "/assets/photos/JAOF9360.JPG",
-  // "/assets/photos/KJUH1172.JPG",
-  // "/assets/photos/LJQR7381.JPG",
-  // "/assets/photos/LXDC8607.JPG",
-  // "/assets/photos/MSNS3324.JPG",
-  // "/assets/photos/MZEY1232.JPG",
-  // "/assets/photos/photo01.JPG",
-  // "/assets/photos/photo02.JPG",
-  // "/assets/photos/photo03.JPG",
-  // "/assets/photos/RSTV8715.JPG",
-  // "/assets/photos/TBEG0155.JPG",
-  // "/assets/photos/TLGJ9655.JPG",
-  // "/assets/photos/VAGX7686.JPG",
-  // "/assets/photos/VBKM0210.JPG",
-  // "/assets/photos/VEVG0626.JPG",
-  // "/assets/photos/XGZG6390.JPG",
-  // "/assets/photos/XIIQ0452.JPG",
-  // "/assets/photos/XWTF8228.JPG",
-  // "/assets/photos/YCUZ7548.JPG",
-];
-
+export const photos = []; // fallback umum (opsional): isi path foto jika array scene-spesifik kosong
+ 
 export const videos = [
   "/assets/videos/video01.mp4",
 ];
-
+ 
 // Musik Anda di folder assets/music/our-song.mp3 (✅ 100% match case)
 export const music = {
   src: "/assets/music/our-song.mp3",
   title: "Our Song",
 };
-
+ 
 // ------------------------------
 // 5. SCENE BARU: Firework & Wishes (Scene 2 — sebelum Polaroid)
 // ------------------------------
@@ -180,7 +110,7 @@ export const music = {
 // BACKWARD COMPATIBLE: masih mendukung format LAMA wishes[] array string & wishInterval number.
 export const fireworkConfig = {
   enabled: true,
-
+ 
   // Kembang API UTAMA di AWAL scene (sebelum wishes)
   mainBirthday: {
     text: "HAPPY BIRTHDAY",
@@ -190,13 +120,13 @@ export const fireworkConfig = {
     textHoldDuration: 2200,       // ms text bertahan FULLY FORMED sebelum fade
     displayDuration: 2800,        // backward compat = formation + hold kira kira
   },
-
+ 
   // WISHES = 1 kembang api per item. TAMBAH / KURANGI array items SESUKA HATI!
   wishes: {
     // 🏁 OVERLAP INTERVAL (ms). 1000 = setiap 1 detik luncurkan 1 wish,
     // TANPA menunggu wish sebelumnya selesai! (natural cinematic fireworks)
     interval: 1500,
-
+ 
     // Default animasi per wish (bisa di override di items level future)
     animation: {
       launchDuration: 720,          // ms roket wish naik ke langit
@@ -205,7 +135,7 @@ export const fireworkConfig = {
       textHoldDuration: 1800,       // ms text utuh sebelum fade
       fadeDuration: 900,            // ms fade text out
     },
-
+ 
     // 6 Default wishes dengan posisi SPREAD (tidak saling menutupi).
     // x dan y = PERSENTASE LEBAR / TINGGI CANVAS (0.0 kiri/atas → 1.0 kanan/bawah)
     // Safe area posisi: y 0.18 ... 0.70, x 0.16 ... 0.84
@@ -241,22 +171,9 @@ export const fireworkConfig = {
         launch:   { x: 0.50, y: 0.95 }
       },
     ],
-
-    // ⬇️ BACKWARD COMPAT (LAMA): masih didukung. Jika format lama dipakai di atas = array string,
-    // sistem akan otomatis convert ke items di runtime (lihat FireworkScene.tsx).
-    _legacyList: [
-      "WISH YOU ALL THE BEST",
-      "SEHAT SELALU",
-      "DIPENUHI CINTA",
-      "SEMOGA SEMUA IMPIANMU TERWUJUD",
-      "SELALU DIBERIKAN KEBAHAGIAAN",
-      "SEMOGA LANGKAHMU SELALU DIMUDAHKAN",
-      "SEMOGA KITA SELALU BERSAMA",
-    ],
-    // ⬇️ BACKWARD COMPAT (LAMA): wishInterval = mapping ke interval (jika user pake format old number)
-    _legacyInterval: 2200,
+ 
   },
-
+ 
   // Kembang api TERAKHIR (SETELAH semua wishes selesai)
   ending: {
     text: "HAPPY BIRTHDAY, MY LOVE",
@@ -264,3 +181,51 @@ export const fireworkConfig = {
     launchDuration: 1900,
   },
 };
+ 
+// ==========================================
+// FOTO TAMBAHAN (BARU) — semua bisa diatur di sini
+// ==========================================
+// Kosong = tidak ditampilkan. Nama file case-sensitive (sistem juga mencoba .JPG/.jpg/.jpeg otomatis).
+// Tips iPhone/Safari: kecilkan foto (maks ±1200px sisi panjang, <400KB) supaya tidak berat/crash.
+// Format HEIC TIDAK bisa tampil di browser — ubah ke JPG/PNG.
+ 
+// Foto latar di SISI kiri/kanan scene Timeline (selang-seling, maks 6)
+export const timelineSidePhotos = [
+  // "/assets/photos/side01.JPG",
+  // "/assets/photos/side02.JPG",
+  // "/assets/photos/side03.JPG",
+  // "/assets/photos/side04.JPG",
+];
+ 
+// Foto latar di SISI kiri/kanan scene Love Letter (maks 6)
+export const loveLetterSidePhotos = [
+ "/assets/photos/egg01.png",
+  // "/assets/photos/letter02.JPG",
+  // "/assets/photos/letter03.JPG",
+  // "/assets/photos/letter04.JPG",
+];
+ 
+// Foto di BELAKANG hati pixel (Final Surprise), maks 5.
+// Jika kosong, otomatis memakai 3 foto pertama dari polaroidPhotos.
+export const finalHeartPhotos = [
+  "/assets/photos/heart01.JPG",
+  // "/assets/photos/heart02.JPG",
+  // "/assets/photos/heart03.JPG",
+];
+ 
+// Foto saat EASTER EGG muncul (tap hati 5x). Rekomendasi: 4 PNG cut-out (latar transparan).
+// 2 foto di atas teks, 2 foto di bawah teks, saling overlap.
+export const easterEggPhotos = [
+  "/assets/photos/egg01.png",
+  // "/assets/photos/egg02.png",
+  // "/assets/photos/egg03.png",
+  // "/assets/photos/egg04.png",
+];
+ 
+// whiteEdge: true  -> tepi putih ala kertas gunting ditambahkan otomatis di sekeliling bentuk PNG
+// whiteEdge: false -> pakai PNG apa adanya (jika PNG kamu sudah punya tepi putih)
+export const easterEggPhotoOptions = {
+  whiteEdge: true,
+  edgePx: 3,
+};
+ 

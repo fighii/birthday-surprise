@@ -2,30 +2,14 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, MouseEvent as RMouseEvent } from "react";
 import { useStory } from "../context/StoryContext";
 import { birthdayConfig } from "../config/birthdayConfig.js";
-import { polaroidPhotos } from "../config/media.js";
+import { polaroidPhotos, finalHeartPhotos, easterEggPhotos, easterEggPhotoOptions } from "../config/media.js";
+import AssetImage from "./AssetImage";
 import StarryBackdrop from "./StarryBackdrop";
 import type { StarryBackdropHandle } from "./StarryBackdrop";
 import SceneLabel from "./SceneLabel";
 import { THEME, WISH_PALETTE } from "../config/sceneTheme";
-import { CutoutText, PaperNote, TornPhoto, PaperSticker } from "./PaperCutout";
-
-// ---------- util ----------
-function usePrefersReducedMotion() {
-  const [reduce, setReduce] = useState(false);
-  useEffect(() => {
-    const m = window.matchMedia("(prefers-reduced-motion: reduce)");
-    setReduce(m.matches);
-    const handler = (e: MediaQueryListEvent) => setReduce(e.matches);
-    m.addEventListener?.("change", handler);
-    return () => m.removeEventListener?.("change", handler);
-  }, []);
-  return reduce;
-}
-
-const hash01 = (n: number) => {
-  const x = Math.sin(n * 12.9898 + 78.233) * 43758.5453;
-  return x - Math.floor(x);
-};
+import { CutoutText, PaperNote, TornPhoto, PaperSticker, hash01 } from "./PaperCutout";
+import { usePrefersReducedMotion } from "./PaperExtras";
 
 // Hati pixel-art 9 x 8 (gaya LED seperti teks kembang api)
 const HEART = [
@@ -42,10 +26,82 @@ const ROW_COLORS = ["#ff9cc2", "#ff7fae", "#ff5d98", "#ff5d98", "#f04a88", "#e23
 const GOLD_COLORS = ["#fff0a0", "#ffe46b", "#FFD84A", "#FFD84A", "#ffc933", "#ffb81f", "#ffb81f", "#ffb81f"];
 
 const TAPS_NEEDED = 5;
+const EGG_VISIBLE_MS = 7000;
+// Nomor scene Final Surprise (BuildUp = 9 -> goToScene(10)). Sesuaikan jika urutan scene kamu berbeda.
+const FINAL_SCENE = 10;
+
+// posisi kipas foto di belakang hati (maks 5)
+const FAN = [
+  { x: -78, y: 22, r: -14, d: 0 },
+  { x: 78, y: 18, r: 13, d: 140 },
+  { x: 0, y: -26, r: 3, d: 280 },
+  { x: -124, y: -30, r: -22, d: 420 },
+  { x: 124, y: -28, r: 20, d: 560 },
+];
+const EGG_ROT = [-10, 8, 7, -9];
+const EGG_DY = [-4, 8, 6, -6];
+
+const cleanList = (a: unknown): string[] =>
+  (Array.isArray(a) ? a : []).filter((p): p is string => typeof p === "string" && p.length > 0);
+
+function EggCluster({
+  photos,
+  startIndex,
+  side,
+  show,
+  reduce,
+  filter,
+  onFail,
+}: {
+  photos: string[];
+  startIndex: number;
+  side: "top" | "bottom";
+  show: boolean;
+  reduce: boolean;
+  filter: string;
+  onFail: (src: string) => void;
+}) {
+  if (!photos.length) return null;
+  const W = "clamp(104px, 34vw, 150px)";
+  return (
+    <div style={{ display: "flex", justifyContent: "center", alignItems: "center" }}>
+      {photos.map((src, i) => {
+        const g = startIndex + i;
+        return (
+          <div
+            key={src}
+            style={
+              {
+                position: "relative",
+                width: W,
+                marginLeft: i ? `calc(${W} * -0.24)` : 0,
+                zIndex: i ? 2 : 1,
+                ["--er" as any]: `${EGG_ROT[g % 4]}deg`,
+                ["--ey" as any]: `${EGG_DY[g % 4]}px`,
+                ["--ef" as any]: side === "top" ? "-36px" : "36px",
+                transform: `translateY(${EGG_DY[g % 4]}px) rotate(${EGG_ROT[g % 4]}deg)`,
+                animation: show && !reduce ? `fsEggPhoto 700ms cubic-bezier(0.34,1.45,0.5,1) ${200 + g * 140}ms both` : undefined,
+                willChange: "transform",
+              } as CSSProperties
+            }
+          >
+            <AssetImage
+              src={src}
+              alt=""
+              draggable={false}
+              onFail={() => onFail(src)}
+              style={{ display: "block", width: "100%", height: "auto", maxHeight: "clamp(110px, 19svh, 170px)", objectFit: "contain", filter }}
+            />
+          </div>
+        );
+      })}
+    </div>
+  );
+}
 
 export default function FinalSurprise() {
-  const { currentScene, markFinalDone } = useStory();
-  const active = currentScene === 9;
+  const { currentScene } = useStory();
+  const active = currentScene === FINAL_SCENE;
   const reduce = usePrefersReducedMotion();
 
   const [phase, setPhase] = useState(0);
@@ -56,13 +112,28 @@ export default function FinalSurprise() {
   const clicksRef = useRef(0);
   const resetTimer = useRef<number | null>(null);
   const timers = useRef<number[]>([]);
-  const markDoneRef = useRef(markFinalDone);
-  markDoneRef.current = markFinalDone;
 
-  const photos = useMemo(
-    () => (polaroidPhotos || []).filter((p: string) => typeof p === "string" && p.length > 0).slice(0, 3),
-    [],
-  );
+  const [bad, setBad] = useState<Record<string, boolean>>({});
+  const markBad = useCallback((src: string) => setBad((b) => ({ ...b, [src]: true })), []);
+
+  // foto di belakang hati: finalHeartPhotos, kalau kosong pakai 3 foto pertama polaroidPhotos
+  const photos = useMemo(() => {
+    const own = cleanList(finalHeartPhotos);
+    return (own.length ? own : cleanList(polaroidPhotos)).slice(0, own.length ? FAN.length : 3);
+  }, []);
+  const heartPhotos = photos.filter((p) => !bad[p]);
+
+  // foto easter egg (cut-out PNG): setengah di atas teks, setengah di bawah
+  const eggPhotos = useMemo(() => cleanList(easterEggPhotos).slice(0, 4), []).filter((p) => !bad[p]);
+  const eggTop = eggPhotos.slice(0, Math.ceil(eggPhotos.length / 2));
+  const eggBottom = eggPhotos.slice(Math.ceil(eggPhotos.length / 2));
+  const eggOpt = (easterEggPhotoOptions as any) || {};
+  const edge = Number(eggOpt.edgePx) || 3;
+  const eggFilter =
+    (eggOpt.whiteEdge === false
+      ? ""
+      : `drop-shadow(${edge}px 0 0 #fff) drop-shadow(-${edge}px 0 0 #fff) drop-shadow(0 ${edge}px 0 #fff) drop-shadow(0 -${edge}px 0 #fff) `) +
+    "drop-shadow(0 6px 10px rgba(0,0,0,0.45))";
 
   const later = useCallback((fn: () => void, ms: number) => {
     const id = window.setTimeout(fn, ms);
@@ -97,7 +168,6 @@ export default function FinalSurprise() {
     setHeartClicks(0);
     setEggVisible(false);
     clicksRef.current = 0;
-    markDoneRef.current();
 
     later(() => setPhase(1), 700);
     later(() => setPhase(2), 2000);
@@ -143,7 +213,7 @@ export default function FinalSurprise() {
           clicksRef.current = 0;
           setHeartClicks(0);
           setEggVisible(false);
-        }, 4800);
+        }, EGG_VISIBLE_MS);
       } else {
         bgRef.current?.burst(e.clientX, e.clientY, WISH_PALETTE[nx % WISH_PALETTE.length]);
         resetTimer.current = window.setTimeout(() => {
@@ -155,18 +225,11 @@ export default function FinalSurprise() {
     [eggVisible, later, bigBurst],
   );
 
-  const heartRows = HEART.length;
   const heartCols = HEART[0].length;
   const cell = 12; // px (diskalakan lewat CSS var pada layar lebar)
   const palette = eggVisible ? GOLD_COLORS : ROW_COLORS;
   const name = (birthdayConfig as any).name;
 
-  // posisi & rotasi 3 polaroid mini di belakang hati
-  const fan = [
-    { x: -78, y: 22, r: -14, d: 0 },
-    { x: 78, y: 18, r: 13, d: 140 },
-    { x: 0, y: -26, r: 3, d: 280 },
-  ];
 
   return (
     <section
@@ -206,6 +269,14 @@ export default function FinalSurprise() {
           0% { transform: scale(1); }
           40% { transform: scale(1.16); }
           100% { transform: scale(1); }
+        }
+        @keyframes fsEggIn {
+          0% { opacity: 0; transform: scale(0.7) translateY(24px); }
+          100% { opacity: 1; transform: scale(1) translateY(0); }
+        }
+        @keyframes fsEggPhoto {
+          from { opacity: 0; transform: translateY(calc(var(--ey) + var(--ef))) rotate(calc(var(--er) + 20deg)) scale(0.6); }
+          to   { opacity: 1; transform: translateY(var(--ey)) rotate(var(--er)) scale(1); }
         }
         @media (prefers-reduced-motion: reduce) {
           .fs-beat { animation: none !important; }
@@ -254,8 +325,8 @@ export default function FinalSurprise() {
 
         {/* hati LED + kipas polaroid kenangan */}
         <div className="relative mt-2" style={{ width: 230, height: 160 }}>
-          {photos.map((src: string, i: number) => {
-            const f = fan[i];
+          {heartPhotos.map((src: string, i: number) => {
+            const f = FAN[i];
             const shown = phase >= 3;
             return (
               <TornPhoto
@@ -264,6 +335,7 @@ export default function FinalSurprise() {
                 width={70}
                 seed={i + 2}
                 tapeColor={i === 1 ? "gold" : "pink"}
+                onFail={() => markBad(src)}
                 style={{
                   position: "absolute",
                   left: "50%",
@@ -373,19 +445,53 @@ export default function FinalSurprise() {
           Tap hati {TAPS_NEEDED}× untuk kejutan
         </SceneLabel>
 
-        {/* easter egg */}
+      </div>
+
+      {/* easter egg: overlay di depan semua elemen, latar di-blur. Foto di atas & bawah teks agar tidak menutupi tulisan */}
+      <div
+        className="absolute inset-0 flex items-center justify-center px-5"
+        aria-hidden={!eggVisible}
+        style={{
+          zIndex: 40,
+          pointerEvents: "none",
+          opacity: eggVisible ? 1 : 0,
+          visibility: eggVisible ? "visible" : "hidden",
+          transition: `opacity 600ms ease, visibility 0s linear ${eggVisible ? "0s" : "600ms"}`,
+        }}
+      >
         <div
-          className={`absolute left-4 right-4 sm:left-1/2 sm:-translate-x-1/2 sm:w-max transition-all duration-700 ${
-            eggVisible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4 pointer-events-none"
-          }`}
-          style={{ bottom: "max(2.5rem, calc(env(safe-area-inset-bottom) + 1.25rem))" }}
+          className="absolute inset-0"
+          style={{
+            backdropFilter: "blur(10px)",
+            WebkitBackdropFilter: "blur(10px)",
+            background: "radial-gradient(ellipse at 50% 50%, rgba(255,216,74,0.14) 0%, rgba(12,4,24,0.55) 70%)",
+          }}
+        />
+        <div
+          className="relative flex flex-col items-center"
+          style={{ width: "100%", maxWidth: 380, gap: "clamp(6px, 1.6svh, 16px)" }}
         >
-          <PaperNote rotate={1.4} tone="cream" tapeColor="gold" seed={4} style={{ maxWidth: 320, margin: "0 auto" }}>
-            <p className="text-sm sm:text-base" style={{ margin: 0, textAlign: "center", lineHeight: 1.4, fontWeight: 600 }}>
-              <span style={{ color: "#e0701a" }}>✦</span> {birthdayConfig.easterEgg}{" "}
-              <span style={{ color: "#e0701a" }}>✦</span>
-            </p>
-          </PaperNote>
+          <EggCluster photos={eggTop} startIndex={0} side="top" show={eggVisible} reduce={reduce} filter={eggFilter} onFail={markBad} />
+
+          <div
+            style={{
+              position: "relative",
+              zIndex: 3,
+              maxWidth: 340,
+              width: "100%",
+              animation: eggVisible && !reduce ? "fsEggIn 700ms cubic-bezier(0.34,1.45,0.5,1) both" : undefined,
+              filter: "drop-shadow(0 0 28px rgba(255,216,74,0.55))",
+            }}
+          >
+            <PaperNote rotate={1.4} tone="cream" tapeColor="gold" seed={4} style={{ margin: "0 auto" }}>
+              <p className="text-base sm:text-lg" style={{ margin: 0, textAlign: "center", lineHeight: 1.45, fontWeight: 600 }}>
+                <span style={{ color: "#e0701a" }}>✦</span> {birthdayConfig.easterEgg}{" "}
+                <span style={{ color: "#e0701a" }}>✦</span>
+              </p>
+            </PaperNote>
+          </div>
+
+          <EggCluster photos={eggBottom} startIndex={eggTop.length} side="bottom" show={eggVisible} reduce={reduce} filter={eggFilter} onFail={markBad} />
         </div>
       </div>
 

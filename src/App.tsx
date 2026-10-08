@@ -13,7 +13,7 @@ import BuildUp from "./components/BuildUp";
 import FinalSurprise from "./components/FinalSurprise";
 
 function Stage() {
-  const { currentScene, isTransitioning } = useStory();
+  const { currentScene, prevScene, isTransitioning } = useStory();
   const scenes: { id: SceneId; Comp: React.ComponentType }[] = [
     { id: 1, Comp: OpeningScene },
     { id: 2, Comp: FireworkScene },
@@ -35,9 +35,12 @@ function Stage() {
       data-transitioning={isTransitioning}
     >
       <CinematicBackground />
-      {scenes.map(({ id, Comp }) => (
-        <Comp key={id} />
-      ))}
+      {/* hemat memori: hanya scene aktif, scene sebelumnya (untuk fade-out) dan scene berikutnya (preload) */}
+      {scenes
+        .filter(({ id }) => id === currentScene || id === prevScene || id === currentScene + 1)
+        .map(({ id, Comp }) => (
+          <Comp key={id} />
+        ))}
       <MusicPlayer />
     </div>
   );

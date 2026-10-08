@@ -1,7 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties } from "react";
-import { polaroidPhotos as photoFallback, polaroidPhotos as polaroidPhotoList } from "../config/media.js";
+import { photos as photoFallback, polaroidPhotos as polaroidPhotoList } from "../config/media.js";
 import { birthdayConfig } from "../config/birthdayConfig.js";
+import { FONT_HAND, FONT_LED, THEME } from "../config/sceneTheme";
+import { PaperNote, PaperSticker, Tape, tornPolygon, hash01 } from "./PaperCutout";
+import { PixelHeart, PixelProgress, paperBg } from "./PaperExtras";
+import AssetImage from "./AssetImage";
+import { assetUrl } from "../lib/assets";
 
 interface PolaroidStackProps {
   onComplete?: () => void;
@@ -13,10 +18,9 @@ interface PolaroidStackProps {
 const TOTAL_TARGET = 30;
 const FINAL_LAST_COUNT = 3; // 3 foto terakhir rapi di tengah (finale)
 const FIRST_DELAY_MS = 1100;
-const CARD_RATIO = 1.22; // tinggi kartu = lebar * 1.22 (rasio polaroid)
+const CARD_RATIO = 1.22; // tinggi kartu = lebar * 1.22
 const EDGE_MARGIN = 10; // jarak aman kartu ke tepi area stack (px)
 
-// Caption tulisan tangan. Bisa di-override lewat birthdayConfig.polaroidCaptions
 const DEFAULT_CAPTIONS = [
   "Selalu kamu ♡",
   "Momen favoritku",
@@ -36,21 +40,23 @@ const DEFAULT_CAPTIONS = [
 const FALL_ORDER = [0, 2, 1, 3, 2, 0, 3, 1];
 
 const HEART_PUFF = [
-  { dx: -22, size: 11, color: "#ff8fb8" },
-  { dx: 4, size: 15, color: "#ff6aa2" },
-  { dx: 26, size: 10, color: "#ffc2d9" },
+  { dx: -22, size: 12, color: "#ff8fb8" },
+  { dx: 4, size: 16, color: "#ff5d98" },
+  { dx: 26, size: 11, color: "#ffd1e3" },
 ];
 
 const BG_HEARTS = [
-  { left: 8, size: 12, delay: 0, dur: 9 },
-  { left: 22, size: 9, delay: 3.2, dur: 11 },
-  { left: 38, size: 14, delay: 6.1, dur: 10 },
-  { left: 55, size: 10, delay: 1.4, dur: 12 },
-  { left: 70, size: 13, delay: 4.6, dur: 9.5 },
-  { left: 84, size: 9, delay: 7.7, dur: 11.5 },
-  { left: 15, size: 11, delay: 8.9, dur: 10.5 },
-  { left: 62, size: 8, delay: 2.3, dur: 13 },
+  { left: 8, size: 14, delay: 0, dur: 9 },
+  { left: 22, size: 11, delay: 3.2, dur: 11 },
+  { left: 38, size: 16, delay: 6.1, dur: 10 },
+  { left: 55, size: 12, delay: 1.4, dur: 12 },
+  { left: 70, size: 15, delay: 4.6, dur: 9.5 },
+  { left: 84, size: 11, delay: 7.7, dur: 11.5 },
+  { left: 15, size: 13, delay: 8.9, dur: 10.5 },
+  { left: 62, size: 10, delay: 2.3, dur: 13 },
 ];
+
+const TAPE_COLORS = ["pink", "gold", "blue"] as const;
 
 // ---------- util deterministik ----------
 const halton = (index: number, base: number) => {
@@ -64,17 +70,11 @@ const halton = (index: number, base: number) => {
   }
   return r;
 };
-const hash01 = (n: number) => {
-  const x = Math.sin(n * 12.9898 + 78.233) * 43758.5453;
-  return x - Math.floor(x);
-};
-
 type SlotItem = {
   index: number;
   key: string;
   photoSrc: string | null;
   caption: string;
-  // layout dinormalisasi: ox/oy dalam [-1, 1] dari ruang bebas -> responsif
   ox: number;
   oy: number;
   rot: number;
@@ -82,6 +82,9 @@ type SlotItem = {
   fall: 0 | 1 | 2 | 3;
   tape: boolean;
   tapeRot: number;
+  tapeColor: "pink" | "gold" | "blue";
+  stickerKind: "star" | "heart";
+  clip: string;
   wob: number;
 };
 
@@ -105,7 +108,7 @@ function makeLayout(c: number): Pick<SlotItem, "ox" | "oy" | "rot" | "scale" | "
   const ox = halton(c + 3, 2) * 2 - 1;
   const oy = halton(c + 3, 3) * 2 - 1;
   const sign = hash01(c + 1) > 0.5 ? 1 : -1;
-  const mag = 4 + hash01(c + 7) * 11; // 4..15 derajat
+  const mag = 4 + hash01(c + 7) * 11;
   const scales = [1.0, 0.86, 0.94, 0.8, 0.9, 0.84, 0.97, 0.82];
   return {
     ox,
@@ -119,7 +122,6 @@ function makeLayout(c: number): Pick<SlotItem, "ox" | "oy" | "rot" | "scale" | "
   };
 }
 
-// Ukuran + posisi kartu (px, relatif ke pusat area) - selalu di dalam area stack
 function placeIn(it: SlotItem, W: number, H: number) {
   const baseW = Math.max(0, Math.min(W * 0.52, H * 0.46));
   const cw = baseW * it.scale;
@@ -132,7 +134,21 @@ function placeIn(it: SlotItem, W: number, H: number) {
   return { cw, ch, x: it.ox * freeX, y: it.oy * freeY };
 }
 
-const fallDuration = (fall: number) => (fall === 3 ? 1250 : fall === 0 ? 1050 : 1100);
+const RISE_MS = 950; // kartu naik dari bawah
+const fallDuration = (_fall: number) => RISE_MS;
+
+// Ukuran caption otomatis: muat satu baris bila bisa, kalau tidak turun ke dua baris.
+const MIN_CAPTION_PX = 11;
+function captionFit(text: string, cw: number, pad: number) {
+  const availW = Math.max(40, cw - pad * 2 - 10);
+  const base = Math.max(13, cw * 0.1);
+  const CHAR = 0.52; // lebar rata-rata huruf (em) pada font tulisan tangan
+  const len = Math.max(1, text.length);
+  const one = availW / (len * CHAR);
+  if (one >= Math.min(base, 14)) return { fontSize: Math.min(base, one), wrap: false };
+  const two = availW / (Math.ceil(len / 2) * CHAR);
+  return { fontSize: Math.max(MIN_CAPTION_PX, Math.min(base, two)), wrap: true };
+}
 
 export default function PolaroidStack({ onComplete, active = true, onLand }: PolaroidStackProps) {
   const availablePhotos = useMemo(() => {
@@ -161,7 +177,6 @@ export default function PolaroidStack({ onComplete, active = true, onLand }: Pol
     landTimers.current = [];
   }, []);
 
-  // ---------- ukur area stack (responsif, aman untuk Safari iPhone) ----------
   useEffect(() => {
     const el = stageRef.current;
     if (!el) return;
@@ -185,22 +200,23 @@ export default function PolaroidStack({ onComplete, active = true, onLand }: Pol
       key: `p-${c}`,
       photoSrc: availablePhotos[c % availablePhotos.length] ?? null,
       caption: captions[c % captions.length],
+      tapeColor: TAPE_COLORS[c % TAPE_COLORS.length],
+      stickerKind: c % 4 === 1 ? "star" : "heart",
+      clip: tornPolygon(c + 11, 2, 10),
       ...makeLayout(c),
     };
     setVisible((prev) => [...prev, item]);
 
-    // beri tahu parent saat kartu mendarat (untuk percikan di backdrop)
     const t = window.setTimeout(() => {
       const el = stageRef.current;
       if (!el || !onLandRef.current) return;
       const r = el.getBoundingClientRect();
       const pl = placeIn(item, r.width, r.height);
       onLandRef.current({ x: r.left + r.width / 2 + pl.x, y: r.top + r.height / 2 + pl.y, index: c });
-    }, Math.round(fallDuration(item.fall) * 0.58));
+    }, Math.round(fallDuration(item.fall) * 0.72));
     landTimers.current.push(t);
   }, [availablePhotos, captions]);
 
-  // ---------- jadwal foto berikutnya ----------
   useEffect(() => {
     if (!active || availablePhotos.length === 0) return;
     if (cursor >= TOTAL_TARGET) return;
@@ -209,7 +225,6 @@ export default function PolaroidStack({ onComplete, active = true, onLand }: Pol
     return () => window.clearTimeout(t);
   }, [cursor, active, addNext, availablePhotos.length]);
 
-  // ---------- selesai ----------
   useEffect(() => {
     if (!active) return;
     if (availablePhotos.length === 0 || cursor >= TOTAL_TARGET) {
@@ -218,13 +233,12 @@ export default function PolaroidStack({ onComplete, active = true, onLand }: Pol
     }
   }, [cursor, active, onComplete, availablePhotos.length]);
 
-  // preload foto berikutnya agar jatuhnya mulus
   useEffect(() => {
     if (availablePhotos.length === 0) return;
     const nxt = availablePhotos[cursor % availablePhotos.length];
     if (nxt) {
       const im = new Image();
-      im.src = nxt;
+      im.src = assetUrl(nxt);
     }
   }, [cursor, availablePhotos]);
 
@@ -233,22 +247,20 @@ export default function PolaroidStack({ onComplete, active = true, onLand }: Pol
   const place = (it: SlotItem) => placeIn(it, size.w, size.h);
 
   const counterLabel = availablePhotos.length === 0 ? null : `${Math.min(cursor, TOTAL_TARGET)} / ${TOTAL_TARGET}`;
-  const progress = Math.min(1, cursor / TOTAL_TARGET);
 
   return (
     <div className="relative w-full max-w-sm mx-auto flex flex-col items-center gap-3 py-2">
       <style>{`
-        @keyframes pl-fall {
-          0%   { transform: translate(var(--sx), var(--sy)) rotate(var(--sr)) scale(1.12); opacity: 0;
-                 animation-timing-function: cubic-bezier(.45,0,.85,.55); }
-          9%   { opacity: 1; }
-          58%  { transform: translate(var(--x), var(--y)) rotate(var(--r)) scale(1);
-                 animation-timing-function: cubic-bezier(.2,.7,.3,1); }
-          73%  { transform: translate(var(--x), calc(var(--y) - 15px)) rotate(calc(var(--r) + var(--wob))) scale(1.01);
-                 animation-timing-function: cubic-bezier(.5,0,.8,.6); }
-          88%  { transform: translate(var(--x), calc(var(--y) + 3px)) rotate(calc(var(--r) - var(--wob) * .4)) scale(1);
-                 animation-timing-function: ease-out; }
-          100% { transform: translate(var(--x), var(--y)) rotate(var(--r)) scale(1); opacity: 1; }
+        @keyframes pl-rise {
+          0%   { transform: translate(var(--sx), var(--sy)) rotate(var(--sr)) scale(.94);
+                 animation-timing-function: cubic-bezier(.16,.84,.3,1); }
+          74%  { transform: translate(var(--x), calc(var(--y) - 9px)) rotate(calc(var(--r) + var(--wob) * .5)) scale(1.01);
+                 animation-timing-function: ease-in-out; }
+          100% { transform: translate(var(--x), var(--y)) rotate(var(--r)) scale(1); }
+        }
+        @keyframes pl-fadein {
+          from { opacity: 0; }
+          to   { opacity: 1; }
         }
         @keyframes pl-puff {
           0%   { opacity: 0; transform: translate(0, 0) scale(.4); }
@@ -257,7 +269,7 @@ export default function PolaroidStack({ onComplete, active = true, onLand }: Pol
         }
         @keyframes pl-float {
           0%   { opacity: 0; transform: translateY(0) scale(.8); }
-          20%  { opacity: .32; }
+          20%  { opacity: .4; }
           100% { opacity: 0; transform: translateY(-360px) scale(1.1); }
         }
         @keyframes pl-glow {
@@ -271,24 +283,20 @@ export default function PolaroidStack({ onComplete, active = true, onLand }: Pol
       `}</style>
 
       {availablePhotos.length === 0 ? (
-        <div className="glass px-6 py-10 text-center">
-          <p className="text-romantic text-3xl text-cinematic-gold mb-2">Your memories</p>
-          <p className="text-cinematic-soft/80">will appear here ❤️</p>
-        </div>
+        <PaperNote rotate={-1.5} tone="cream" tapeColor="pink" seed={3} innerStyle={{ padding: "22px 28px" }}>
+          <p style={{ margin: 0, fontFamily: FONT_HAND, fontSize: 28, textAlign: "center" }}>Your memories</p>
+          <p style={{ margin: "4px 0 0", textAlign: "center" }}>will appear here ❤️</p>
+        </PaperNote>
       ) : (
         <div
           ref={stageRef}
           aria-label="Polaroid photo stack"
           style={{
             position: "relative",
-            // Ukuran aman iPhone 17 Safari (402pt lebar): pakai svh agar stabil saat toolbar Safari berubah
             width: "min(92vw, 380px)",
             height: "min(112vw, 54svh, 470px)",
-            isolation: "isolate", // z-index kartu TIDAK bocor menutupi teks di atasnya
-            // Potong hanya sisi ATAS: kartu yang jatuh muncul dari tepi atas area ini, tidak menimpa teks.
-            clipPath: "inset(0 -40px -40px -40px)",
-            // Tanpa background/border/bayangan: tidak ada lagi "bingkai" transparan di belakang stack
-            // yang menimpa tulisan di atasnya. Beri jarak kecil agar tidak menempel ke teks.
+            isolation: "isolate",
+            clipPath: "inset(0 -40px -100svh -40px)",
             marginTop: 14,
           }}
         >
@@ -306,7 +314,7 @@ export default function PolaroidStack({ onComplete, active = true, onLand }: Pol
             }}
           />
 
-          {/* hati melayang di belakang kartu */}
+          {/* hati pixel melayang di belakang kartu */}
           {BG_HEARTS.map((h, i) => (
             <span
               key={i}
@@ -316,15 +324,13 @@ export default function PolaroidStack({ onComplete, active = true, onLand }: Pol
                 position: "absolute",
                 bottom: -10,
                 left: `${h.left}%`,
-                fontSize: h.size,
-                color: i % 2 ? "#ffb3d1" : "#ff7fae",
                 opacity: 0,
                 zIndex: 1,
                 animation: `pl-float ${h.dur}s ease-in ${h.delay}s infinite`,
                 pointerEvents: "none",
               }}
             >
-              ♥
+              <PixelHeart size={h.size} color={i % 2 ? "#ffb3d1" : "#ff7fae"} glow={false} />
             </span>
           ))}
 
@@ -333,20 +339,19 @@ export default function PolaroidStack({ onComplete, active = true, onLand }: Pol
               const { cw, ch, x, y } = place(it);
               const errored = errorMap[it.key];
               const depth = Math.max(0, cursor - 1 - it.index);
-              const dim = Math.min(depth, 8) * 0.045; // kartu lama sedikit lebih gelap -> fokus ke yang terbaru
+              const dim = Math.min(depth, 8) * 0.045;
 
-              // titik awal jatuh: selalu dari ATAS area stack
-              const topY = -(size.h / 2 + ch * 0.95);
+              const topY = size.h / 2 + ch / 2 + 36; // mulai tepat di bawah area stack
               let sx = x;
               let sr = it.rot;
-              let dur = fallDuration(it.fall);
-              if (it.fall === 0) { sx = x * 0.6; sr = it.rot + (it.rot >= 0 ? 22 : -22); }
-              if (it.fall === 1) { sx = x - size.w * 0.38; sr = it.rot - 38; }
-              if (it.fall === 2) { sx = x + size.w * 0.38; sr = it.rot + 40; }
-              if (it.fall === 3) { sx = x; sr = it.rot + (it.rot >= 0 ? 150 : -150); }
+              const dur = fallDuration(it.fall);
+              if (it.fall === 0) { sx = x * 0.7; sr = it.rot + (it.rot >= 0 ? 8 : -8); }
+              if (it.fall === 1) { sx = x - size.w * 0.14; sr = it.rot - 16; }
+              if (it.fall === 2) { sx = x + size.w * 0.14; sr = it.rot + 16; }
+              if (it.fall === 3) { sx = x; sr = it.rot + (it.rot >= 0 ? 30 : -30); }
 
-              const pad = cw * 0.06;
-              const photoH = cw * 0.88;
+              const pad = cw * 0.07;
+              const photoH = cw * 0.84;
 
               const style = {
                 position: "absolute",
@@ -358,7 +363,7 @@ export default function PolaroidStack({ onComplete, active = true, onLand }: Pol
                 marginTop: -ch / 2,
                 zIndex: 10 + it.index,
                 transform: `translate(${x}px, ${y}px) rotate(${it.rot}deg)`,
-                animation: `pl-fall ${dur}ms linear backwards`,
+                animation: `pl-rise ${dur}ms linear backwards, pl-fadein 220ms ease-out backwards`,
                 willChange: "transform",
                 ["--x" as any]: `${x}px`,
                 ["--y" as any]: `${y}px`,
@@ -371,147 +376,135 @@ export default function PolaroidStack({ onComplete, active = true, onLand }: Pol
 
               return (
                 <div key={it.key} className="pl-card" style={style}>
-                  {/* bingkai polaroid krem-pink */}
                   <div
                     style={{
                       position: "relative",
                       width: "100%",
                       height: "100%",
-                      boxSizing: "border-box",
-                      padding: `${pad}px ${pad}px 0`,
-                      borderRadius: 4,
-                      background: "linear-gradient(160deg, #fffaf6 0%, #fdeef1 100%)",
-                      boxShadow:
-                        "0 12px 24px rgba(40,6,34,0.50), 0 3px 7px rgba(255,120,170,0.28), inset 0 0 0 1px rgba(255,255,255,0.7)",
+                      filter: "drop-shadow(0 10px 12px rgba(30,4,30,0.5)) drop-shadow(1px 2px 0 rgba(0,0,0,0.25))",
                     }}
                   >
-                    {/* foto */}
+                    {/* kertas sobek krem */}
                     <div
                       style={{
+                        ...paperBg("#fff7ec"),
                         position: "relative",
                         width: "100%",
-                        height: photoH,
-                        overflow: "hidden",
-                        borderRadius: 2,
-                        background: "#2a1428",
-                        boxShadow: "inset 0 0 8px rgba(0,0,0,0.35)",
+                        height: "100%",
+                        boxSizing: "border-box",
+                        padding: `${pad}px ${pad}px 0`,
+                        clipPath: it.clip,
                       }}
                     >
-                      {it.photoSrc && !errored ? (
-                        <img
-                          src={it.photoSrc}
-                          alt={`Memory ${it.index + 1}`}
-                          decoding="async"
-                          draggable={false}
-                          onError={() => handleImgError(it.key)}
+                      <div
+                        style={{
+                          position: "relative",
+                          width: "100%",
+                          height: photoH,
+                          overflow: "hidden",
+                          background: "#2a1428",
+                          boxShadow: "inset 0 0 8px rgba(0,0,0,0.35)",
+                        }}
+                      >
+                        {it.photoSrc && !errored ? (
+                          <AssetImage
+                            src={it.photoSrc}
+                            alt={`Memory ${it.index + 1}`}
+                            decoding="async"
+                            draggable={false}
+                            onFail={() => handleImgError(it.key)}
+                            style={{
+                              width: "100%",
+                              height: "100%",
+                              objectFit: "cover",
+                              display: "block",
+                              filter: "saturate(1.05) contrast(1.02) sepia(0.07)",
+                            }}
+                          />
+                        ) : (
+                          <div
+                            style={{
+                              width: "100%",
+                              height: "100%",
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              color: "rgba(255,220,235,0.5)",
+                              fontSize: 13,
+                            }}
+                          >
+                            Memory {it.index + 1}
+                          </div>
+                        )}
+                        <div
+                          aria-hidden
                           style={{
-                            width: "100%",
-                            height: "100%",
-                            objectFit: "cover",
-                            display: "block",
-                            filter: "saturate(1.06) contrast(1.02) sepia(0.07)",
+                            position: "absolute",
+                            inset: 0,
+                            background:
+                              "linear-gradient(135deg, rgba(255,160,200,0.20) 0%, rgba(255,160,200,0) 42%, rgba(255,214,150,0.14) 100%)",
+                            mixBlendMode: "soft-light",
+                            pointerEvents: "none",
                           }}
                         />
-                      ) : (
-                        <div
-                          style={{
-                            width: "100%",
-                            height: "100%",
-                            display: "flex",
-                            alignItems: "center",
-                            justifyContent: "center",
-                            color: "rgba(255,220,235,0.5)",
-                            fontSize: 13,
-                          }}
-                        >
-                          Memory {it.index + 1}
-                        </div>
-                      )}
-                      {/* nuansa rose / light leak */}
+                      </div>
+
+                      <div
+                        style={{
+                          height: ch - pad - photoH,
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          textAlign: "center",
+                          fontFamily: FONT_HAND,
+                          fontSize: captionFit(it.caption, cw, pad).fontSize,
+                          lineHeight: 1.08,
+                          color: "#d93a78",
+                          padding: "0 5px",
+                          whiteSpace: captionFit(it.caption, cw, pad).wrap ? "normal" : "nowrap",
+                          overflowWrap: "break-word",
+                          ["textWrap" as any]: "balance",
+                          overflow: "hidden",
+                        }}
+                      >
+                        {it.caption}
+                      </div>
+
+                      {/* peredup kartu lama */}
                       <div
                         aria-hidden
                         style={{
                           position: "absolute",
                           inset: 0,
-                          background:
-                            "linear-gradient(135deg, rgba(255,160,200,0.20) 0%, rgba(255,160,200,0) 42%, rgba(255,214,150,0.14) 100%)",
-                          mixBlendMode: "soft-light",
+                          background: "rgb(40,8,40)",
+                          opacity: dim,
+                          transition: "opacity 700ms ease",
                           pointerEvents: "none",
                         }}
                       />
                     </div>
 
-                    {/* caption tulisan tangan */}
-                    <div
-                      style={{
-                        height: ch - pad - photoH,
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        textAlign: "center",
-                        fontFamily: '"Dancing Script","Snell Roundhand","Segoe Script","Brush Script MT",cursive',
-                        fontSize: Math.max(12, cw * 0.088),
-                        lineHeight: 1.1,
-                        color: "#8c3d5f",
-                        padding: "0 4px",
-                        whiteSpace: "nowrap",
-                        overflow: "hidden",
-                      }}
-                    >
-                      {it.caption}
-                    </div>
-
-                    {/* washi tape atau stiker hati */}
+                    {/* washi tape atau stiker kertas */}
                     {it.tape ? (
-                      <div
-                        aria-hidden
-                        style={{
-                          position: "absolute",
-                          top: -9,
-                          left: "50%",
-                          width: cw * 0.36,
-                          height: 17,
-                          marginLeft: -(cw * 0.18),
-                          transform: `rotate(${it.tapeRot}deg)`,
-                          background:
-                            "repeating-linear-gradient(45deg, rgba(255,176,208,0.78) 0 6px, rgba(255,214,230,0.78) 6px 12px)",
-                          boxShadow: "0 1px 3px rgba(60,10,40,0.25)",
-                          opacity: 0.92,
-                        }}
+                      <Tape
+                        color={it.tapeColor}
+                        width={cw * 0.36}
+                        height={16}
+                        rotate={it.tapeRot}
+                        style={{ top: -8, left: "50%", marginLeft: -(cw * 0.18) }}
                       />
                     ) : (
-                      <span
-                        aria-hidden
-                        style={{
-                          position: "absolute",
-                          right: -6,
-                          top: -8,
-                          fontSize: Math.max(14, cw * 0.14),
-                          color: "#ff5d98",
-                          textShadow: "0 1px 4px rgba(120,10,60,0.45)",
-                          transform: `rotate(${it.tapeRot}deg)`,
-                        }}
-                      >
-                        ♥
-                      </span>
+                      <PaperSticker
+                        kind={it.stickerKind}
+                        color={it.stickerKind === "star" ? "#FFD84A" : "#ff7fae"}
+                        size={Math.max(24, cw * 0.2)}
+                        rotate={it.tapeRot * 2}
+                        style={{ right: -8, top: -12 }}
+                      />
                     )}
-
-                    {/* peredup kartu lama */}
-                    <div
-                      aria-hidden
-                      style={{
-                        position: "absolute",
-                        inset: 0,
-                        borderRadius: 4,
-                        background: "rgb(40,8,40)",
-                        opacity: dim,
-                        transition: "opacity 700ms ease",
-                        pointerEvents: "none",
-                      }}
-                    />
                   </div>
 
-                  {/* percikan hati saat mendarat */}
+                  {/* percikan hati pixel saat mendarat */}
                   {HEART_PUFF.map((h, i) => (
                     <span
                       key={i}
@@ -521,15 +514,13 @@ export default function PolaroidStack({ onComplete, active = true, onLand }: Pol
                         position: "absolute",
                         left: "50%",
                         bottom: "10%",
-                        fontSize: h.size,
-                        color: h.color,
                         opacity: 0,
                         pointerEvents: "none",
-                        animation: `pl-puff 1200ms ease-out ${Math.round(dur * 0.58) + i * 90}ms both`,
+                        animation: `pl-puff 1200ms ease-out ${Math.round(dur * 0.72) + i * 90}ms both`,
                         ["--dx" as any]: `${h.dx}px`,
                       } as CSSProperties}
                     >
-                      ♥
+                      <PixelHeart size={h.size} color={h.color} />
                     </span>
                   ))}
                 </div>
@@ -539,21 +530,23 @@ export default function PolaroidStack({ onComplete, active = true, onLand }: Pol
       )}
 
       {counterLabel && (
-        <div className="flex flex-col items-center gap-1.5" style={{ width: "min(60vw, 220px)" }}>
-          <p className="text-xs tracking-widest" style={{ color: "rgba(255,200,222,0.75)" }}>
-            <span style={{ color: "#ff7fae" }}>♥</span> {counterLabel}
-          </p>
-          <div style={{ width: "100%", height: 2, borderRadius: 2, background: "rgba(255,200,222,0.15)" }}>
-            <div
-              style={{
-                width: `${progress * 100}%`,
-                height: "100%",
-                borderRadius: 2,
-                background: "linear-gradient(90deg, #ff8fb8, #ffd1e3)",
-                transition: "width 600ms ease",
-              }}
-            />
+        <div className="flex flex-col items-center gap-1.5" style={{ width: "min(70vw, 260px)", position: "relative", zIndex: 60 }}>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 6,
+              fontFamily: FONT_LED,
+              fontSize: 11,
+              fontWeight: 700,
+              letterSpacing: "0.16em",
+              color: THEME.labelText,
+            }}
+          >
+            <PixelHeart size={11} glow={false} />
+            <span>{counterLabel}</span>
           </div>
+          <PixelProgress lit={Math.min(cursor, TOTAL_TARGET)} total={TOTAL_TARGET} height={5} gap={2} />
         </div>
       )}
     </div>
