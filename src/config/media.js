@@ -199,10 +199,10 @@ export const timelineSidePhotos = [
  
 // Foto latar di SISI kiri/kanan scene Love Letter (maks 6)
 export const loveLetterSidePhotos = [
- "/assets/photos/egg01.png",
-  // "/assets/photos/letter02.JPG",
-  // "/assets/photos/letter03.JPG",
-  // "/assets/photos/letter04.JPG",
+  "/assets/photos/loveLetter/loveLetterSidephotos01.png",
+  "/assets/photos/loveLetter/loveLetterSidephotos02.png",
+  "/assets/photos/loveLetter/loveLetterSidephotos03.png",
+  "/assets/photos/loveLetter/loveLetterSidephotos04.png",
 ];
  
 // Foto di BELAKANG hati pixel (Final Surprise), maks 5.
@@ -217,9 +217,9 @@ export const finalHeartPhotos = [
 // 2 foto di atas teks, 2 foto di bawah teks, saling overlap.
 export const easterEggPhotos = [
   "/assets/photos/easterEgg/egg01.png",
-  // "/assets/photos/egg02.png",
-  // "/assets/photos/egg03.png",
-  // "/assets/photos/egg04.png",
+  "/assets/photos/easterEgg/egg02.png",
+  "/assets/photos/easterEgg/egg03.png",
+  "/assets/photos/easterEgg/egg04.png",
 ];
  
 // whiteEdge: true  -> tepi putih ala kertas gunting ditambahkan otomatis di sekeliling bentuk PNG

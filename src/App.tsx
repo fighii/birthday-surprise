@@ -1,23 +1,23 @@
 import { StoryProvider, useStory, type SceneId } from "./context/StoryContext";
 import CinematicBackground from "./components/CinematicBackground";
 import MusicPlayer from "./components/MusicPlayer";
-import OpeningScene from "./components/OpeningScene";
-import FireworkScene from "./components/FireworkScene";
-import BirthdayScene from "./components/BirthdayScene";
-import FirstMemoryScene from "./components/FirstMemoryScene";
-import PhotoStory from "./components/PhotoStory";
-import TimelineScene from "./components/TimelineScene";
-import VideoScene from "./components/VideoScene";
-import LoveLetter from "./components/LoveLetter";
-import BuildUp from "./components/BuildUp";
-import FinalSurprise from "./components/FinalSurprise";
+import OpeningScene from "./components/01.OpeningScene";
+import FireworkScene from "./components/02.FireworkScene";
+import PolaroidStack from "./components/03.PolaroidStack";
+import FirstMemoryScene from "./components/04.FirstMemoryScene";
+import PhotoStory from "./components/05.PhotoStory";
+import TimelineScene from "./components/06.TimelineScene";
+import VideoScene from "./components/07.VideoScene";
+import LoveLetter from "./components/08.LoveLetter";
+import BuildUp from "./components/09.BuildUp";
+import FinalSurprise from "./components/10.FinalSurprise";
 
 function Stage() {
   const { currentScene, prevScene, isTransitioning } = useStory();
   const scenes: { id: SceneId; Comp: React.ComponentType }[] = [
     { id: 1, Comp: OpeningScene },
     { id: 2, Comp: FireworkScene },
-    { id: 3, Comp: BirthdayScene },
+    { id: 3, Comp: PolaroidStack },
     { id: 4, Comp: FirstMemoryScene },
     { id: 5, Comp: PhotoStory },
     { id: 6, Comp: TimelineScene },

@@ -937,7 +937,7 @@ export default function FireworkScene() {
         aria-hidden
       >
         <span style={{ color: "#FF9A4A" }}>✦</span>{" "}
-        {hintMode === "start" ? "TAP LAYAR UNTUK MULAI" : "TAP-TAP LAYAR UNTUK WISHES"}{" "}
+        {hintMode === "start" ? "TAP LAYAR UNTUK MULAI" : "TAP-TAP LAYAR UNTUK DOA UNTUK AYANG"}{" "}
         <span style={{ color: "#FF9A4A" }}>✦</span>
       </div>
 

@@ -5,7 +5,6 @@ import { birthdayConfig } from "../config/birthdayConfig.js";
 import { FONT_LED, THEME } from "../config/sceneTheme";
 import { Tape, tornPolygon } from "./PaperCutout";
 import { PixelHeart, PixelProgress, paperBg } from "./PaperExtras";
-import { assetUrl } from "../lib/assets";
 
 type MusicConfigShape = { src?: string; title?: string } | null;
 const musicConfig = musicCfg as MusicConfigShape;
@@ -172,7 +171,7 @@ export default function MusicPlayer() {
       {musicConfig && musicConfig.src && (
         <audio
           ref={audioRef}
-          src={assetUrl(musicConfig.src)}
+          src={musicConfig.src}
           loop={birthdayConfig.music?.loop ?? true}
           preload="auto"
           onPlay={() => setMusicNeedsTap(false)}
