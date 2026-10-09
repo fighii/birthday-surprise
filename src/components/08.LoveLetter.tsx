@@ -336,7 +336,7 @@ function LetterBody({
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const contentRef = useRef<HTMLDivElement | null>(null);
   const caretRef = useRef<HTMLSpanElement | null>(null);
-  const userScrolled = useRef(false);
+  const [ready, setReady] = useState(false); // true setelah surat selesai & digulir sampai bawah
   const [sc, setSc] = useState({ can: false, top: 0, size: 1, atEnd: true });
 
   const measure = useCallback(() => {
@@ -367,20 +367,15 @@ function LetterBody({
     };
   }, [measure]);
 
+  // Continue aktif hanya setelah teks selesai diketik DAN isi surat digulir sampai bawah
+  // (kalau surat muat satu layar, cukup menunggu selesai mengetik). Tidak ada auto-scroll.
   useEffect(() => {
-    if (!run) userScrolled.current = false;
-  }, [run]);
-
-  // ikuti posisi kursor saat mengetik (berhenti jika pembaca menggulir sendiri)
-  useEffect(() => {
-    if (!run || done || userScrolled.current || n % 3 !== 0) return;
-    const el = scrollRef.current;
-    const c = caretRef.current;
-    if (!el || !c) return;
-    const limit = el.getBoundingClientRect().bottom - 64;
-    const cb = c.getBoundingClientRect().bottom;
-    if (cb > limit) el.scrollTop += cb - limit;
-  }, [n, run, done]);
+    if (!run) {
+      setReady(false);
+      return;
+    }
+    if (done && (!sc.can || sc.atEnd)) setReady(true);
+  }, [run, done, sc.can, sc.atEnd]);
 
   return (
     <PaperNote rotate={-0.5} tone="cream" tapeColor="pink" seed={8} innerStyle={{ padding: "20px 18px 14px" }}>
@@ -388,13 +383,8 @@ function LetterBody({
         <div
           ref={scrollRef}
           className="hide-scrollbar text-left"
-          onTouchStart={() => {
-            userScrolled.current = true;
-          }}
-          onWheel={() => {
-            userScrolled.current = true;
-          }}
-          onClick={() => {
+          onClick={(e) => {
+            if ((e.target as HTMLElement).closest("button")) return;
             if (run && !done) skip(); // tap = langsung tampilkan semua
           }}
           style={{
@@ -459,20 +449,23 @@ function LetterBody({
               <PixelHeart size={26} />
             </div>
 
-            {done && (
-              <div
-                className="flex justify-end"
-                style={{
-                  position: "sticky",
-                  bottom: 0,
-                  paddingTop: 14,
-                  marginTop: 6,
-                  background: "linear-gradient(to top, #fff7ec 65%, rgba(255,247,236,0))",
-                }}
-              >
-                <PaperButton variant="primary" seed={3} onClick={onContinue}>
+            {run && (
+              <div className="flex flex-col items-end" style={{ paddingTop: 14, marginTop: 6, gap: 6 }}>
+                <PaperButton
+                  variant="primary"
+                  seed={3}
+                  onClick={onContinue}
+                  disabled={!ready}
+                  aria-disabled={!ready}
+                  style={{ opacity: ready ? 1 : 0.45, cursor: ready ? "pointer" : "not-allowed", transition: "opacity 400ms ease" }}
+                >
                   Continue →
                 </PaperButton>
+                {!ready && done && sc.can && (
+                  <span style={{ fontFamily: FONT_LED, fontSize: 10, letterSpacing: "0.1em", color: "#d93a78" }}>
+                    geser sampai bawah dulu
+                  </span>
+                )}
               </div>
             )}
           </div>
@@ -504,9 +497,8 @@ function LetterBody({
             position: "absolute",
             left: 0,
             right: 0,
-            bottom: done ? 64 : 0,
-            height: 40,
-            background: "linear-gradient(to top, #fff7ec 10%, rgba(255,247,236,0))",
+            bottom: 0,
+            height: 24,
             pointerEvents: "none",
             opacity: run && sc.can && !sc.atEnd ? 1 : 0,
             transition: "opacity 300ms ease",
@@ -557,18 +549,7 @@ function FoldedLetter({
   const copy = (
     <div style={{ position: "absolute", left: 0, right: 0, top: 0, pointerEvents: "none" }}>{body}</div>
   );
-  const shade = (
-    <div
-      style={{
-        position: "absolute",
-        inset: 0,
-        background: "rgba(70,20,50,0.5)",
-        opacity: 0.5,
-        animation: unfolding && !reduce ? "lrShade 1000ms ease-out both" : undefined,
-        pointerEvents: "none",
-      }}
-    />
-  );
+  const shade = null; // tanpa lapisan gelap saat surat dibuka
   const clipTop = "inset(0 0 66.4% 0)";
   const clipMid = "inset(33.3% 0 33.3% 0)";
   const clipBot = "inset(66.4% 0 0 0)";
@@ -876,7 +857,6 @@ export default function LoveLetter() {
         </div>
       </div>
 
-      <div className="vignette" />
     </section>
   );
 }

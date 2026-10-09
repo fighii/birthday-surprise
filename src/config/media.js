@@ -72,6 +72,16 @@ export const photoStoryPhotos = [
   "/assets/photos/photoStory/photostory08.jpeg",
   "/assets/photos/photoStory/photostory09.jpeg",
   "/assets/photos/photoStory/photostory10.jpeg",
+  "/assets/photos/photoStory/photostory11.jpeg",
+  "/assets/photos/photoStory/photostory12.jpeg",
+  "/assets/photos/photoStory/photostory13.jpeg",
+  "/assets/photos/photoStory/photostory14.jpeg",
+  "/assets/photos/photoStory/photostory15.jpeg",
+  "/assets/photos/photoStory/photostory16.jpeg",
+  "/assets/photos/photoStory/photostory17.jpeg",
+  "/assets/photos/photoStory/photostory18.jpeg",
+  "/assets/photos/photoStory/photostory19.jpeg",
+  "/assets/photos/photoStory/photostory20.jpeg",
 ];
  
 // ------------------------------

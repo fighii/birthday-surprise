@@ -97,16 +97,6 @@ export const birthdayConfig = {
   easterEgg: "Psst... I love you more than you know \u2764\ufe0f",
 
   photoDuration: 700,
-  // transitionDuration: 500,
-  // animation: {
-  //   photoTransitionMs: 500,
-  //   sceneFadeMs: 700,
-  // },
-  // music: {
-  //   autoPlay: true,
-  //   volume: 0.45,
-  //   loop: true,
-  // },
 };
 
 export const noButtonMessages = [
@@ -116,9 +106,9 @@ export const noButtonMessages = [
   "",
   "Yakin mau pilih NO? \ud83e\udd7a",
   "",
-  "Kayaknya tombolnya nggak mau kamu tekan \ud83d\ude0c\u2764\ufe0f",
+  "Kayaknya tombolnya nggak bisa ayg tekan \ud83d\ude0c\u2764\ufe0f",
   "",
-  "Sudahlah... pilih yang satunya saja \u2764\ufe0f",
+  "Sudahlah... pilih yang satunya aja \u2764\ufe0f",
   "",
   "NO button has left the chat. \ud83d\ude02\u2764\ufe0f",
 ];

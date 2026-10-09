@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useStory } from "../context/StoryContext";
 import { birthdayConfig } from "../config/birthdayConfig.js";
 import { photos as photoFallback, firstMemoryPhoto as firstMemoryList } from "../config/media.js";
@@ -16,6 +16,37 @@ export default function FirstMemoryScene() {
   const [phase, setPhase] = useState(0);
   const [errored, setErrored] = useState(false);
   const burstRef = useRef<PixelBurstHandle | null>(null);
+
+  // Fit-to-screen: ukur tinggi isi, kecilkan otomatis bila lebih tinggi dari layar (tanpa bergantung CSS global)
+  const sectionRef = useRef<HTMLElement | null>(null);
+  const wrapRef = useRef<HTMLDivElement | null>(null);
+  const [fit, setFit] = useState({ scale: 1, h: 0 });
+  useLayoutEffect(() => {
+    const sec = sectionRef.current;
+    const wrap = wrapRef.current;
+    if (!sec || !wrap) return;
+    const calc = () => {
+      const natural = wrap.offsetHeight; // tidak terpengaruh transform
+      if (!natural) return;
+      const cs = getComputedStyle(sec);
+      const vv = window.visualViewport?.height ?? window.innerHeight;
+      const box = Math.min(sec.clientHeight || vv, vv);
+      const avail = box - parseFloat(cs.paddingTop || "0") - parseFloat(cs.paddingBottom || "0");
+      const scale = Math.max(0.5, Math.min(1, avail / natural));
+      setFit((p) => (Math.abs(p.scale - scale) < 0.005 && p.h === natural ? p : { scale, h: natural }));
+    };
+    calc();
+    const ro = new ResizeObserver(calc);
+    ro.observe(wrap);
+    ro.observe(sec);
+    window.addEventListener("resize", calc);
+    window.visualViewport?.addEventListener("resize", calc);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener("resize", calc);
+      window.visualViewport?.removeEventListener("resize", calc);
+    };
+  }, [active]);
 
   const photo = useMemo(() => {
     const specific = (firstMemoryList || []).filter((p: string) => typeof p === "string" && p.length > 0);
@@ -57,17 +88,34 @@ export default function FirstMemoryScene() {
   // Scene ini TIDAK pindah otomatis: hanya lewat tombol Continue.
 
   return (
-    <section className={`scene-layer ${active ? "scene-active" : "scene-hidden"}`} aria-hidden={!active}>
+    <section
+      ref={sectionRef}
+      className={`scene-layer scene-scrollable ${active ? "scene-active" : "scene-hidden"}`}
+      aria-hidden={!active}
+      style={{
+        justifyContent: "flex-start",
+        paddingTop: "max(3.25rem, calc(env(safe-area-inset-top) + 2.75rem))",
+        paddingBottom: "max(1.5rem, calc(env(safe-area-inset-bottom) + 1rem))",
+      }}
+    >
       <style>{`@keyframes fmZoom{from{transform:scale(1)}to{transform:scale(1.07)}}`}</style>
       {active && <PixelBurstLayer ref={burstRef} />}
 
-      <div className="relative z-10 w-full max-w-xl mx-auto flex flex-col items-center text-center gap-4 px-4">
+      <div
+        className="relative z-10 w-full max-w-xl mx-auto"
+        style={{ height: fit.h ? fit.h * fit.scale : undefined, marginTop: "auto", marginBottom: "auto" }}
+      >
+      <div
+        ref={wrapRef}
+        className="w-full flex flex-col items-center text-center gap-3 px-4"
+        style={{ transform: `scale(${fit.scale})`, transformOrigin: "top center" }}
+      >
         <SceneLabel visible={phase >= 1}>Kenangan pertama</SceneLabel>
 
         <h2 style={{ margin: 0 }}>
           <CutoutText
             text={birthdayConfig.firstMemoryTitle}
-            fontSize="clamp(24px, 7.4vw, 36px)"
+            fontSize="clamp(20px, 5.8vw, 32px)"
             seed={5}
             show={phase >= 1}
             reduce={reduce}
@@ -77,7 +125,8 @@ export default function FirstMemoryScene() {
         <div
           className="relative transition-all duration-[1400ms] ease-out"
           style={{
-            width: "min(82vw, 340px)",
+            // lebar menyesuaikan tinggi layar agar seluruh isi (judul, foto, catatan, tombol) muat
+            width: "max(180px, min(82vw, 340px, calc((100svh - 25rem) / 1.22)))",
             opacity: phase >= 2 ? 1 : 0,
             transform: phase >= 2 ? "scale(1)" : "scale(1.08)",
             filter: phase >= 2 ? "blur(0)" : "blur(6px)",
@@ -170,6 +219,7 @@ export default function FirstMemoryScene() {
             Continue →
           </PaperButton>
         </div>
+      </div>
       </div>
 
       <div className="vignette" />

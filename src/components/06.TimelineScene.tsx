@@ -208,18 +208,6 @@ export default function TimelineScene() {
         <div
           style={{
             position: "absolute",
-            left: 0,
-            right: 0,
-            bottom: 0,
-            height: 90,
-            background: "linear-gradient(to top, rgba(10,8,34,0.55), rgba(10,8,34,0))",
-            opacity: active && sc.can && !sc.atEnd ? 1 : 0,
-            transition: "opacity 300ms ease",
-          }}
-        />
-        <div
-          style={{
-            position: "absolute",
             left: "50%",
             bottom: "calc(env(safe-area-inset-bottom, 0px) + 14px)",
             padding: "6px 14px 5px",

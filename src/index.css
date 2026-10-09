@@ -83,7 +83,7 @@ body,
 .scene-active {
   opacity: 1;
   pointer-events: auto;
-  filter: blur(0);
+  filter: none;
   transform: scale(1);
   z-index: 2;
 }
@@ -174,8 +174,10 @@ body,
   position: absolute;
   inset: 0;
   pointer-events: none;
+  /* tipis & hanya di sudut: dulu menggelapkan ±45% area tengah-atas dan tengah-bawah (judul & tombol tampak terpotong).
+     Untuk menghilangkan sepenuhnya: ganti dengan `display: none;` */
   background:
-    radial-gradient(ellipse at center, transparent 40%, rgba(10, 6, 18, 0.6) 80%, rgba(10, 6, 18, 0.92) 100%);
+    radial-gradient(ellipse at center, transparent 68%, rgba(10, 6, 18, 0.38) 100%);
   z-index: 50;
 }
 
@@ -397,7 +399,7 @@ body,
 }
 
 @media (max-width: 393px) and (max-height: 852px) {
-  .scene-layer {
+  .scene-layer:not(.scene-scrollable) {
     padding-top: calc(env(safe-area-inset-top) + 0.75rem) !important;
     padding-bottom: calc(env(safe-area-inset-bottom) + 0.75rem) !important;
   }
