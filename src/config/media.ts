@@ -22,7 +22,7 @@
 // Tips Safari iPhone: kecilkan foto (±1200px, <400KB). Format HEIC tidak bisa tampil di browser.
 // ==========================================
 
-const all = import.meta.glob<string>("../assets/**/*.{jpg,jpeg,JPG,JPEG,png,PNG,webp,WEBP,mp4,MP4,mp3,MP3}", {
+const all = import.meta.glob<string>("../assets/**/*.{jpg,jpeg,JPG,JPEG,png,PNG,webp,WEBP,mp4,MP4,MOV,mp3,MP3}", {
   eager: true,
   query: "?url",
   import: "default",
