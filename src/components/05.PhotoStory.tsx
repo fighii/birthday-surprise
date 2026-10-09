@@ -7,7 +7,7 @@ import { PaperButton, PaperFrame } from "./PaperExtras";
 import AssetImage from "./AssetImage";
 
 const SEGMENT_DURATION = 2000;
-const PROGRESS_STEPS = 20; // progres bergerak per kotak (pixel), bukan mulus
+const PROGRESS_STEPS = 10; // progres bergerak per kotak (pixel), bukan mulus
 
 export default function PhotoStory() {
   const { currentScene, goToScene } = useStory();
