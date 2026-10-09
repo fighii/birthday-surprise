@@ -97,6 +97,11 @@ export const birthdayConfig = {
   easterEgg: "Psst... I love you more than you know \u2764\ufe0f",
 
   photoDuration: 700,
+  music: {
+    autoPlay: true,
+    volume: 0.45,
+    loop: true,
+  },
 };
 
 export const noButtonMessages = [
