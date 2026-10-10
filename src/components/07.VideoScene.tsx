@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useStory } from "../context/StoryContext";
 import { birthdayConfig } from "../config/birthdayConfig.js";
 import { videos as videoList } from "../config/media.js";
@@ -17,6 +17,14 @@ export default function VideoScene() {
   const [videoError, setVideoError] = useState(false);
   const video = videoList && videoList[0];
   const duckDoneRef = useRef<"idle" | "on" | "off">("idle");
+  const advancedRef = useRef(false);
+
+  // pindah ke scene berikutnya (sekali saja)
+  const advance = useCallback(() => {
+    if (advancedRef.current) return;
+    advancedRef.current = true;
+    goToScene(8, 300);
+  }, [goToScene]);
 
   useEffect(() => {
     if (!active) return;
@@ -24,6 +32,7 @@ export default function VideoScene() {
       duckDoneRef.current = "on";
       void duckMusicOn();
     }
+    advancedRef.current = false;
     setPhase(0);
     setBlocked(false);
     setVideoError(false);
@@ -100,6 +109,14 @@ export default function VideoScene() {
     return;
   }, [active, phase]);
 
+  // jaga-jaga: kalau video tidak ada / gagal dimuat, jangan menahan pengguna di scene ini
+  const noPlayableVideo = !video || videoError;
+  useEffect(() => {
+    if (!active || phase < 2 || !noPlayableVideo) return;
+    const t = window.setTimeout(advance, 4000);
+    return () => window.clearTimeout(t);
+  }, [active, phase, noPlayableVideo, advance]);
+
   return (
     <section className={`scene-layer ${active ? "scene-active" : "scene-hidden"}`} aria-hidden={!active}>
       <style>{`@keyframes vsBob { 0%,100% { translate: 0 0; } 50% { translate: 0 -6px; } }`}</style>
@@ -156,6 +173,7 @@ export default function VideoScene() {
                   className="w-full h-full object-contain bg-black select-none pointer-events-none"
                   onError={() => setVideoError(true)}
                   onPlaying={() => setBlocked(false)}
+                  onEnded={advance}
                   aria-label="Birthday surprise video"
                   draggable={false}
                 />
@@ -192,9 +210,6 @@ export default function VideoScene() {
           )}
         </div>
 
-        <PaperButton variant="secondary" seed={6} onClick={() => goToScene(8, 300)}>
-          One last thing →
-        </PaperButton>
       </div>
 
       <div className="vignette" />
