@@ -10,6 +10,7 @@ import { assetUrl } from "../lib/assets";
 const SEGMENT_DURATION = 2000;
 const PROGRESS_STEPS = 10; // progres bergerak per kotak (pixel), bukan mulus
 const FADE_MS = 700;
+const LOAD_SAFETY_MS = 1500; // jaga-jaga: kalau event load tidak datang, tetap tampilkan slide
 
 // Progres story. Segmen aktif dianimasikan murni lewat CSS (steps) -> tidak ada setState per tick,
 // jadi foto + bingkai tidak ikut dirender ulang tiap 60 ms seperti sebelumnya.
@@ -56,22 +57,42 @@ interface SlideProps {
   onScreen: boolean;
   failed: boolean;
   onFail: (i: number) => void;
+  /** dipanggil setelah slide ini selesai fade-in -> slide lama boleh dibuang */
+  onSettled: (i: number) => void;
 }
 
 // Satu slide. Memo + hanya dirender saat aktif / sedang memudar keluar (maks 2 sekaligus).
-const StorySlide = memo(function StorySlide({ src, i, count, onScreen, failed, onFail }: SlideProps) {
+const StorySlide = memo(function StorySlide({ src, i, count, onScreen, failed, onFail, onSettled }: SlideProps) {
   const fallback = src.startsWith("#fallback-");
   const broken = fallback || failed;
   const rot = (hash01(i * 7 + 3) - 0.5) * 7;
+
+  // Slide baru baru boleh fade-in setelah fotonya selesai dimuat. Kalau tidak, bingkai kosong
+  // muncul dulu lalu "meloncat" saat foto datang (itu yang terlihat sebagai glitch).
+  const [loaded, setLoaded] = useState(false);
+  const ready = loaded || broken;
+  useEffect(() => {
+    const t = window.setTimeout(() => setLoaded(true), LOAD_SAFETY_MS);
+    return () => window.clearTimeout(t);
+  }, []);
+
+  // setelah fade-in selesai, beri tahu induk supaya slide lama dibuang
+  useEffect(() => {
+    if (!onScreen || !ready) return;
+    const t = window.setTimeout(() => onSettled(i), FADE_MS + 60);
+    return () => window.clearTimeout(t);
+  }, [onScreen, ready, i, onSettled]);
+
   return (
     <div
       className="absolute inset-0"
       style={{
-        // slide lama tetap opaque sampai slide baru selesai fade-in (tanpa "lubang" gelap di tengah)
-        opacity: 1,
+        // slide lama tetap opaque sampai slide baru selesai fade-in (tanpa "lubang" gelap di tengah);
+        // slide baru tetap transparan sampai fotonya siap
+        opacity: onScreen && !ready ? 0 : 1,
         zIndex: onScreen ? 2 : 0,
         pointerEvents: onScreen ? "auto" : "none",
-        animation: onScreen ? `psIn ${FADE_MS}ms ease both` : undefined,
+        animation: onScreen && ready ? `psIn ${FADE_MS}ms ease both` : undefined,
         willChange: "opacity",
       }}
     >
@@ -110,6 +131,7 @@ const StorySlide = memo(function StorySlide({ src, i, count, onScreen, failed, o
               alt={`Story ${i + 1}`}
               loading="eager"
               decoding="async"
+              onLoad={() => setLoaded(true)}
               onFail={() => onFail(i)}
               draggable={false}
               style={{
@@ -159,17 +181,24 @@ export default function PhotoStory() {
   }, []);
   const count = photos.length;
 
-  const [index, setIndex] = useState(0);
-  const [leaving, setLeaving] = useState<number | null>(null);
+  // index & slide yang sedang memudar keluar diubah BERSAMAAN dalam satu setState.
+  // (Sebelumnya `leaving` diisi lewat effect -> ada 1 frame di mana slide lama sudah hilang
+  // dan slide baru masih transparan, jadi layar berkedip.)
+  const [view, setView] = useState<{ index: number; leaving: number | null }>({ index: 0, leaving: null });
+  const index = view.index;
   const [errored, setErrored] = useState<Record<number, boolean>>({});
   const touchStartX = useRef<number | null>(null);
   const touchStartY = useRef<number | null>(null);
 
   const indexRef = useRef(0);
-  const lastIdxRef = useRef(0);
   const leavingRef = useRef(false);
+  const preloaded = useRef<Map<string, HTMLImageElement>>(new Map());
 
   const markErr = useCallback((i: number) => setErrored((e) => (e[i] ? e : { ...e, [i]: true })), []);
+  const onSettled = useCallback(
+    (i: number) => setView((v) => (v.index === i && v.leaving !== null ? { index: v.index, leaving: null } : v)),
+    [],
+  );
 
   const goNext = useCallback(() => {
     if (indexRef.current >= count - 1) {
@@ -179,13 +208,16 @@ export default function PhotoStory() {
       }
       return;
     }
-    indexRef.current += 1;
-    setIndex(indexRef.current);
+    const from = indexRef.current;
+    indexRef.current = from + 1;
+    setView({ index: from + 1, leaving: from });
   }, [count, goToScene]);
 
   const goPrev = useCallback(() => {
-    indexRef.current = Math.max(0, indexRef.current - 1);
-    setIndex(indexRef.current);
+    const from = indexRef.current;
+    if (from <= 0) return;
+    indexRef.current = from - 1;
+    setView({ index: from - 1, leaving: from });
   }, []);
 
   const onTap = (e: React.MouseEvent<HTMLDivElement>) => {
@@ -217,21 +249,9 @@ export default function PhotoStory() {
   useEffect(() => {
     if (!active) return;
     indexRef.current = 0;
-    lastIdxRef.current = 0;
     leavingRef.current = false;
-    setIndex(0);
-    setLeaving(null);
+    setView({ index: 0, leaving: null });
   }, [active]);
-
-  // slide lama dipertahankan sebentar sebagai latar saat slide baru fade-in, lalu dibuang dari DOM
-  useEffect(() => {
-    if (!active) return;
-    if (lastIdxRef.current === index) return;
-    setLeaving(lastIdxRef.current);
-    lastIdxRef.current = index;
-    const t = window.setTimeout(() => setLeaving(null), FADE_MS + 60);
-    return () => window.clearTimeout(t);
-  }, [index, active]);
 
   // auto-lanjut: satu setTimeout per slide (sebelumnya setInterval 60 ms + setState)
   useEffect(() => {
@@ -240,18 +260,23 @@ export default function PhotoStory() {
     return () => window.clearTimeout(t);
   }, [index, active, goNext]);
 
-  // pra-muat foto berikutnya supaya fade-in tidak menunggu decode
+  // pra-muat & pra-decode foto berikutnya (objek Image disimpan agar bitmap tidak dibuang)
   useEffect(() => {
     if (!active) return;
     const nxt = photos[index + 1];
-    if (nxt && !nxt.startsWith("#fallback-")) {
-      const im = new Image();
-      im.decoding = "async";
-      im.src = assetUrl(nxt);
-    }
+    if (!nxt || nxt.startsWith("#fallback-") || preloaded.current.has(nxt)) return;
+    const im = new Image();
+    im.decoding = "async";
+    im.src = assetUrl(nxt);
+    preloaded.current.set(nxt, im);
+    void im.decode?.().catch(() => {});
   }, [index, active, photos]);
 
-  const shown = leaving !== null && leaving !== index ? [leaving, index] : [index];
+  useEffect(() => {
+    if (!active) preloaded.current.clear();
+  }, [active]);
+
+  const shown = view.leaving !== null && view.leaving !== index ? [view.leaving, index] : [index];
 
   return (
     <section
@@ -286,6 +311,7 @@ export default function PhotoStory() {
                 onScreen={i === index}
                 failed={!!errored[i]}
                 onFail={markErr}
+                onSettled={onSettled}
               />
             ))}
         </div>

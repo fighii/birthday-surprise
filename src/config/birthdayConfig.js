@@ -79,7 +79,7 @@ export const birthdayConfig = {
   loveLetterTitle: "One Last Thing...",
   loveLetterGreeting: "To My Favorite Person \u2764\ufe0f",
   loveLetter:
-    "Hari ini adalah hari spesial, tapi bagi fighi, setiap hari bersama ayg sudah cukup jadi alasan untuk bersyukur.\n\nFighi masih ingat hal-hal kecil yang ayg lakukan, yang membuat fighi sadar betapa beruntungnya aku kenal ayg.\n\nTerima kasih sudah menjadi kamu yang sabar kadang pemarah, yang hangat memberi senyuman, yang selalu membuat hariku lebih baik.\n\nSemoga tahun ini dan tahun tahun selanjutnya membawa banyak hal indah untukmu. Fighi tau kedepan akan berat, tapi semoga semua impian ayg dan fighi perlahan jadi nyata, dan aku akan selalu ada di sampingmu, satu langkah demi satu langkah.\n\nHappy birthday, orang favoritku.",
+    "Hari ini adalah hari spesial, tapi bagi fighi, setiap hari bersama ayg sudah cukup jadi alasan untuk bersyukur.\n\nFighi masih ingat hal-hal kecil yang ayg lakukan, yang membuat fighi sadar betapa beruntungnya fighi kenal ayg.\n\nTerima kasih sudah menjadi ayg yang sabar tapi kadang pemarah, yang hangat memberi senyuman dan tertawa, yang selalu membuat hari fighi lebih bahagia.\n\nSemoga tahun ini dan tahun tahun selanjutnya membawa banyak hal indah untuk ayg. \n\nFighi tau kedepannya akan berat, tapi semoga semua impian ayg dan fighi perlahan jadi nyata, dan fighi akan selalu ada di samping ayg, satu langkah demi satu langkah, ke semua tempat bareng ayg.\n\nHappy birthday, orang favoritku.",
 
   // Kecepatan efek mengetik surat (ms per huruf). Makin kecil = makin cepat.
   loveLetterTypeMsPerChar: 16,

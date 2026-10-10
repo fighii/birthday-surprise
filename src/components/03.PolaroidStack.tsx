@@ -155,6 +155,9 @@ function captionFit(text: string, cw: number, pad: number) {
 // Hanya kartu terakhir yang dirender; kartu lama sudah tertutup & redup, jadi dibuang dari DOM
 // (hemat memori decode foto + layer GPU di HP).
 const RENDER_WINDOW = 8;
+// Kartu ke-(RENDER_WINDOW + 1) masih dirender sebentar sambil memudar, baru dibuang dari DOM,
+// jadi kartu terbawah tidak "pop" hilang tiba-tiba.
+const FADE_OUT_MS = 500;
 
 interface PolaroidCardProps {
   it: SlotItem;
@@ -168,6 +171,9 @@ interface PolaroidCardProps {
 const PolaroidCard = memo(function PolaroidCard({ it, W, H, depth, errored, onFail }: PolaroidCardProps) {
   const { cw, ch, x, y } = placeIn(it, W, H);
   const dim = Math.min(depth, 8) * 0.045;
+  // kartu ke-(RENDER_WINDOW+1) = kartu paling bawah yang akan dibuang: memudar halus dulu,
+  // baru hilang dari DOM saat kartu berikutnya masuk.
+  const fading = depth >= RENDER_WINDOW;
   const dur = fallDuration(it.fall);
   const topY = H / 2 + ch / 2 + 36; // mulai tepat di bawah area stack
   let sx = x;
@@ -192,7 +198,9 @@ const PolaroidCard = memo(function PolaroidCard({ it, W, H, depth, errored, onFa
     zIndex: 10 + it.index,
     transform: `translate(${x}px, ${y}px) rotate(${it.rot}deg)`,
     animation: `pl-rise ${dur}ms linear backwards, pl-fadein 220ms ease-out backwards`,
-    willChange: "transform",
+    willChange: "transform, opacity",
+    opacity: fading ? 0 : 1,
+    transition: `opacity ${FADE_OUT_MS}ms ease`,
     ["--x" as any]: `${x}px`,
     ["--y" as any]: `${y}px`,
     ["--r" as any]: `${it.rot}deg`,
@@ -533,7 +541,7 @@ function PolaroidDeck({ onComplete, active = true, onLand }: PolaroidDeckProps) 
           ))}
 
           {size.w > 0 &&
-            visible.slice(-RENDER_WINDOW).map((it) => (
+            visible.slice(-(RENDER_WINDOW + 1)).map((it) => (
               <PolaroidCard
                 key={it.key}
                 it={it}
