@@ -25,7 +25,8 @@ export const paperBg = (color: string): CSSProperties => ({
   backgroundColor: color,
   backgroundImage: GRAIN,
   backgroundSize: "120px 120px",
-  backgroundBlendMode: "multiply",
+  // backgroundBlendMode: "multiply" dihapus: butir kertas sudah berwarna coklat transparan,
+  // jadi hasilnya hampir sama, tapi blend-mode memaksa kompositing ekstra di tiap elemen (berat di HP).
 });
 
 // Poligon tepi sobek (tidak rata di keempat sisi)

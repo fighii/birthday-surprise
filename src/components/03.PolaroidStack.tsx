@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties } from "react";
 import { photos as photoFallback, polaroidPhotos as polaroidPhotoList } from "../config/media.js";
 import { birthdayConfig } from "../config/birthdayConfig.js";
@@ -152,6 +152,205 @@ function captionFit(text: string, cw: number, pad: number) {
   return { fontSize: Math.max(MIN_CAPTION_PX, Math.min(base, two)), wrap: true };
 }
 
+// Hanya kartu terakhir yang dirender; kartu lama sudah tertutup & redup, jadi dibuang dari DOM
+// (hemat memori decode foto + layer GPU di HP).
+const RENDER_WINDOW = 8;
+
+interface PolaroidCardProps {
+  it: SlotItem;
+  W: number;
+  H: number;
+  depth: number;
+  errored: boolean;
+  onFail: (key: string) => void;
+}
+
+const PolaroidCard = memo(function PolaroidCard({ it, W, H, depth, errored, onFail }: PolaroidCardProps) {
+  const { cw, ch, x, y } = placeIn(it, W, H);
+  const dim = Math.min(depth, 8) * 0.045;
+  const dur = fallDuration(it.fall);
+  const topY = H / 2 + ch / 2 + 36; // mulai tepat di bawah area stack
+  let sx = x;
+  let sr = it.rot;
+  if (it.fall === 0) { sx = x * 0.7; sr = it.rot + (it.rot >= 0 ? 8 : -8); }
+  if (it.fall === 1) { sx = x - W * 0.14; sr = it.rot - 16; }
+  if (it.fall === 2) { sx = x + W * 0.14; sr = it.rot + 16; }
+  if (it.fall === 3) { sx = x; sr = it.rot + (it.rot >= 0 ? 30 : -30); }
+
+  const pad = cw * 0.07;
+  const photoH = cw * 0.84;
+  const cap = captionFit(it.caption, cw, pad);
+
+  const style = {
+    position: "absolute",
+    left: "50%",
+    top: "50%",
+    width: cw,
+    height: ch,
+    marginLeft: -cw / 2,
+    marginTop: -ch / 2,
+    zIndex: 10 + it.index,
+    transform: `translate(${x}px, ${y}px) rotate(${it.rot}deg)`,
+    animation: `pl-rise ${dur}ms linear backwards, pl-fadein 220ms ease-out backwards`,
+    willChange: "transform",
+    ["--x" as any]: `${x}px`,
+    ["--y" as any]: `${y}px`,
+    ["--r" as any]: `${it.rot}deg`,
+    ["--sx" as any]: `${sx}px`,
+    ["--sy" as any]: `${topY}px`,
+    ["--sr" as any]: `${sr}deg`,
+    ["--wob" as any]: `${it.wob}deg`,
+  } as CSSProperties;
+
+  return (
+    <div className="pl-card" style={style}>
+      <div
+        style={{
+          position: "relative",
+          width: "100%",
+          height: "100%",
+          // satu drop-shadow saja (dulu dua) -> jauh lebih ringan di GPU HP
+          filter: "drop-shadow(0 8px 10px rgba(30,4,30,0.5))",
+        }}
+      >
+        {/* kertas sobek krem */}
+        <div
+          style={{
+            ...paperBg("#fff7ec"),
+            position: "relative",
+            width: "100%",
+            height: "100%",
+            boxSizing: "border-box",
+            padding: `${pad}px ${pad}px 0`,
+            clipPath: it.clip,
+          }}
+        >
+          <div
+            style={{
+              position: "relative",
+              width: "100%",
+              height: photoH,
+              overflow: "hidden",
+              background: "#2a1428",
+              boxShadow: "inset 0 0 8px rgba(0,0,0,0.35)",
+            }}
+          >
+            {it.photoSrc && !errored ? (
+              <AssetImage
+                src={it.photoSrc}
+                alt={`Memory ${it.index + 1}`}
+                decoding="async"
+                draggable={false}
+                onFail={() => onFail(it.key)}
+                style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
+              />
+            ) : (
+              <div
+                style={{
+                  width: "100%",
+                  height: "100%",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  color: "rgba(255,220,235,0.5)",
+                  fontSize: 13,
+                }}
+              >
+                Memory {it.index + 1}
+              </div>
+            )}
+            {/* semburat hangat (tanpa mix-blend-mode & tanpa CSS filter pada foto: mahal di HP) */}
+            <div
+              aria-hidden
+              style={{
+                position: "absolute",
+                inset: 0,
+                background:
+                  "linear-gradient(135deg, rgba(255,160,200,0.10) 0%, rgba(255,160,200,0) 42%, rgba(255,214,150,0.08) 100%)",
+                pointerEvents: "none",
+              }}
+            />
+          </div>
+
+          <div
+            style={{
+              height: ch - pad - photoH,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              textAlign: "center",
+              fontFamily: FONT_HAND,
+              fontSize: cap.fontSize,
+              lineHeight: 1.08,
+              color: "#d93a78",
+              padding: "0 5px",
+              whiteSpace: cap.wrap ? "normal" : "nowrap",
+              overflowWrap: "break-word",
+              ["textWrap" as any]: "balance",
+              overflow: "hidden",
+            }}
+          >
+            {it.caption}
+          </div>
+
+          {/* peredup kartu lama */}
+          <div
+            aria-hidden
+            style={{
+              position: "absolute",
+              inset: 0,
+              background: "rgb(40,8,40)",
+              opacity: dim,
+              transition: "opacity 700ms ease",
+              pointerEvents: "none",
+            }}
+          />
+        </div>
+
+        {/* washi tape atau stiker kertas */}
+        {it.tape ? (
+          <Tape
+            color={it.tapeColor}
+            width={cw * 0.36}
+            height={16}
+            rotate={it.tapeRot}
+            style={{ top: -8, left: "50%", marginLeft: -(cw * 0.18) }}
+          />
+        ) : (
+          <PaperSticker
+            kind={it.stickerKind}
+            color={it.stickerKind === "star" ? "#FFD84A" : "#ff7fae"}
+            size={Math.max(24, cw * 0.2)}
+            rotate={it.tapeRot * 2}
+            style={{ right: -8, top: -12 }}
+          />
+        )}
+      </div>
+
+      {/* percikan hati pixel saat mendarat: hanya untuk 3 kartu terbaru, tanpa glow filter */}
+      {depth <= 2 &&
+        HEART_PUFF.map((h, i) => (
+          <span
+            key={i}
+            aria-hidden
+            className="pl-puff"
+            style={{
+              position: "absolute",
+              left: "50%",
+              bottom: "10%",
+              opacity: 0,
+              pointerEvents: "none",
+              animation: `pl-puff 1200ms ease-out ${Math.round(dur * 0.72) + i * 90}ms both`,
+              ["--dx" as any]: `${h.dx}px`,
+            } as CSSProperties}
+          >
+            <PixelHeart size={h.size} color={h.color} glow={false} />
+          </span>
+        ))}
+    </div>
+  );
+});
+
 function PolaroidDeck({ onComplete, active = true, onLand }: PolaroidDeckProps) {
   const availablePhotos = useMemo(() => {
     const specific = (polaroidPhotoList || []).filter((p: string) => typeof p === "string" && p.length > 0);
@@ -244,9 +443,7 @@ function PolaroidDeck({ onComplete, active = true, onLand }: PolaroidDeckProps) 
     }
   }, [cursor, availablePhotos]);
 
-  const handleImgError = (key: string) => setErrorMap((m) => ({ ...m, [key]: true }));
-
-  const place = (it: SlotItem) => placeIn(it, size.w, size.h);
+  const handleImgError = useCallback((key: string) => setErrorMap((m) => (m[key] ? m : { ...m, [key]: true })), []);
 
   const counterLabel = availablePhotos.length === 0 ? null : `${Math.min(cursor, TOTAL_TARGET)} / ${TOTAL_TARGET}`;
 
@@ -310,14 +507,13 @@ function PolaroidDeck({ onComplete, active = true, onLand }: PolaroidDeckProps) 
               inset: "8% 6%",
               borderRadius: "50%",
               background: "radial-gradient(closest-side, rgba(255,150,190,0.22), rgba(255,150,190,0))",
-              filter: "blur(14px)",
               animation: "pl-glow 5s ease-in-out infinite",
               zIndex: 0,
             }}
           />
 
           {/* hati pixel melayang di belakang kartu */}
-          {BG_HEARTS.map((h, i) => (
+          {BG_HEARTS.slice(0, 5).map((h, i) => (
             <span
               key={i}
               aria-hidden
@@ -337,197 +533,17 @@ function PolaroidDeck({ onComplete, active = true, onLand }: PolaroidDeckProps) 
           ))}
 
           {size.w > 0 &&
-            visible.map((it) => {
-              const { cw, ch, x, y } = place(it);
-              const errored = errorMap[it.key];
-              const depth = Math.max(0, cursor - 1 - it.index);
-              const dim = Math.min(depth, 8) * 0.045;
-
-              const topY = size.h / 2 + ch / 2 + 36; // mulai tepat di bawah area stack
-              let sx = x;
-              let sr = it.rot;
-              const dur = fallDuration(it.fall);
-              if (it.fall === 0) { sx = x * 0.7; sr = it.rot + (it.rot >= 0 ? 8 : -8); }
-              if (it.fall === 1) { sx = x - size.w * 0.14; sr = it.rot - 16; }
-              if (it.fall === 2) { sx = x + size.w * 0.14; sr = it.rot + 16; }
-              if (it.fall === 3) { sx = x; sr = it.rot + (it.rot >= 0 ? 30 : -30); }
-
-              const pad = cw * 0.07;
-              const photoH = cw * 0.84;
-
-              const style = {
-                position: "absolute",
-                left: "50%",
-                top: "50%",
-                width: cw,
-                height: ch,
-                marginLeft: -cw / 2,
-                marginTop: -ch / 2,
-                zIndex: 10 + it.index,
-                transform: `translate(${x}px, ${y}px) rotate(${it.rot}deg)`,
-                animation: `pl-rise ${dur}ms linear backwards, pl-fadein 220ms ease-out backwards`,
-                willChange: "transform",
-                ["--x" as any]: `${x}px`,
-                ["--y" as any]: `${y}px`,
-                ["--r" as any]: `${it.rot}deg`,
-                ["--sx" as any]: `${sx}px`,
-                ["--sy" as any]: `${topY}px`,
-                ["--sr" as any]: `${sr}deg`,
-                ["--wob" as any]: `${it.wob}deg`,
-              } as CSSProperties;
-
-              return (
-                <div key={it.key} className="pl-card" style={style}>
-                  <div
-                    style={{
-                      position: "relative",
-                      width: "100%",
-                      height: "100%",
-                      filter: "drop-shadow(0 10px 12px rgba(30,4,30,0.5)) drop-shadow(1px 2px 0 rgba(0,0,0,0.25))",
-                    }}
-                  >
-                    {/* kertas sobek krem */}
-                    <div
-                      style={{
-                        ...paperBg("#fff7ec"),
-                        position: "relative",
-                        width: "100%",
-                        height: "100%",
-                        boxSizing: "border-box",
-                        padding: `${pad}px ${pad}px 0`,
-                        clipPath: it.clip,
-                      }}
-                    >
-                      <div
-                        style={{
-                          position: "relative",
-                          width: "100%",
-                          height: photoH,
-                          overflow: "hidden",
-                          background: "#2a1428",
-                          boxShadow: "inset 0 0 8px rgba(0,0,0,0.35)",
-                        }}
-                      >
-                        {it.photoSrc && !errored ? (
-                          <AssetImage
-                            src={it.photoSrc}
-                            alt={`Memory ${it.index + 1}`}
-                            decoding="async"
-                            draggable={false}
-                            onFail={() => handleImgError(it.key)}
-                            style={{
-                              width: "100%",
-                              height: "100%",
-                              objectFit: "cover",
-                              display: "block",
-                              filter: "saturate(1.05) contrast(1.02) sepia(0.07)",
-                            }}
-                          />
-                        ) : (
-                          <div
-                            style={{
-                              width: "100%",
-                              height: "100%",
-                              display: "flex",
-                              alignItems: "center",
-                              justifyContent: "center",
-                              color: "rgba(255,220,235,0.5)",
-                              fontSize: 13,
-                            }}
-                          >
-                            Memory {it.index + 1}
-                          </div>
-                        )}
-                        <div
-                          aria-hidden
-                          style={{
-                            position: "absolute",
-                            inset: 0,
-                            background:
-                              "linear-gradient(135deg, rgba(255,160,200,0.20) 0%, rgba(255,160,200,0) 42%, rgba(255,214,150,0.14) 100%)",
-                            mixBlendMode: "soft-light",
-                            pointerEvents: "none",
-                          }}
-                        />
-                      </div>
-
-                      <div
-                        style={{
-                          height: ch - pad - photoH,
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          textAlign: "center",
-                          fontFamily: FONT_HAND,
-                          fontSize: captionFit(it.caption, cw, pad).fontSize,
-                          lineHeight: 1.08,
-                          color: "#d93a78",
-                          padding: "0 5px",
-                          whiteSpace: captionFit(it.caption, cw, pad).wrap ? "normal" : "nowrap",
-                          overflowWrap: "break-word",
-                          ["textWrap" as any]: "balance",
-                          overflow: "hidden",
-                        }}
-                      >
-                        {it.caption}
-                      </div>
-
-                      {/* peredup kartu lama */}
-                      <div
-                        aria-hidden
-                        style={{
-                          position: "absolute",
-                          inset: 0,
-                          background: "rgb(40,8,40)",
-                          opacity: dim,
-                          transition: "opacity 700ms ease",
-                          pointerEvents: "none",
-                        }}
-                      />
-                    </div>
-
-                    {/* washi tape atau stiker kertas */}
-                    {it.tape ? (
-                      <Tape
-                        color={it.tapeColor}
-                        width={cw * 0.36}
-                        height={16}
-                        rotate={it.tapeRot}
-                        style={{ top: -8, left: "50%", marginLeft: -(cw * 0.18) }}
-                      />
-                    ) : (
-                      <PaperSticker
-                        kind={it.stickerKind}
-                        color={it.stickerKind === "star" ? "#FFD84A" : "#ff7fae"}
-                        size={Math.max(24, cw * 0.2)}
-                        rotate={it.tapeRot * 2}
-                        style={{ right: -8, top: -12 }}
-                      />
-                    )}
-                  </div>
-
-                  {/* percikan hati pixel saat mendarat */}
-                  {HEART_PUFF.map((h, i) => (
-                    <span
-                      key={i}
-                      aria-hidden
-                      className="pl-puff"
-                      style={{
-                        position: "absolute",
-                        left: "50%",
-                        bottom: "10%",
-                        opacity: 0,
-                        pointerEvents: "none",
-                        animation: `pl-puff 1200ms ease-out ${Math.round(dur * 0.72) + i * 90}ms both`,
-                        ["--dx" as any]: `${h.dx}px`,
-                      } as CSSProperties}
-                    >
-                      <PixelHeart size={h.size} color={h.color} />
-                    </span>
-                  ))}
-                </div>
-              );
-            })}
+            visible.slice(-RENDER_WINDOW).map((it) => (
+              <PolaroidCard
+                key={it.key}
+                it={it}
+                W={size.w}
+                H={size.h}
+                depth={Math.max(0, cursor - 1 - it.index)}
+                errored={!!errorMap[it.key]}
+                onFail={handleImgError}
+              />
+            ))}
         </div>
       )}
 

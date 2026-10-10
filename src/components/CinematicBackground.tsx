@@ -18,8 +18,11 @@ const moods: Record<string, { rose: number; dark: number }> = {
 };
 
 export default function CinematicBackground() {
-  const { sceneMood } = useStory();
+  const { sceneMood, currentScene } = useStory();
   const m = moods[sceneMood] ?? moods.opening;
+  // PhotoStory (scene 5) menutupi seluruh layar dengan foto buram -> animasi bintang di belakangnya
+  // tidak terlihat, jadi dihentikan agar CPU/GPU HP tidak terbuang.
+  const starsActive = currentScene !== 5;
 
   return (
     <div
@@ -27,7 +30,7 @@ export default function CinematicBackground() {
       style={{ zIndex: 0, background: THEME.night }}
       aria-hidden
     >
-      <StarryBackdrop variant="night" active />
+      <StarryBackdrop variant="night" active={starsActive} />
 
       {/* nuansa plum-rose di bagian bawah, naik saat scene makin hangat */}
       <div

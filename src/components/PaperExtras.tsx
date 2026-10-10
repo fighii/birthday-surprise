@@ -248,7 +248,8 @@ export function PaperFrame({
         width,
         display: width ? "block" : "inline-block",
         transform: `rotate(${rotate}deg)`,
-        filter: "drop-shadow(0 14px 18px rgba(0,0,0,0.5)) drop-shadow(0 2px 3px rgba(0,0,0,0.35))",
+        // satu drop-shadow (dulu dua): bingkai besar, jadi biaya blur-nya terasa di HP
+        filter: "drop-shadow(0 12px 14px rgba(0,0,0,0.5))",
         ...style,
       }}
     >
