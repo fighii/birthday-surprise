@@ -152,6 +152,11 @@ export const fireworkConfig = {
         launch:   { x: 0.50, y: 0.95 }
       },
       {
+        text: "SEMOGA BISA SERING JALAN JALAN",
+        position: { x: 0.50, y: 0.66 }, // TENGAH BAWAH (posisi akhir diacak oleh scene)
+        launch:   { x: 0.50, y: 0.95 }
+      },
+      {
         text: "SEMOGA KITA SELALU BERSAMA",
         position: { x: 0.78, y: 0.72 }, // KANAN BAWAH
         launch:   { x: 0.50, y: 0.95 }

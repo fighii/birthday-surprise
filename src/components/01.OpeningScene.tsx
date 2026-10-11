@@ -4,6 +4,7 @@ import { useStory } from "../context/StoryContext";
 import { birthdayConfig, noButtonMessages } from "../config/birthdayConfig.js";
 import { music as musicCfg } from "../config/media.js";
 import { useTypewriter } from "../hooks/useTypewriter";
+import { useTypeSound } from "../hooks/useTypeSound";
 import { FONT_HAND, FONT_LED, THEME } from "../config/sceneTheme";
 import { PaperNote, PaperSticker, hash01 } from "./PaperCutout";
 import { PaperButton, PixelBurstLayer, usePrefersReducedMotion } from "./PaperExtras";
@@ -117,6 +118,10 @@ export default function OpeningScene() {
     enabled: line2Done && active,
     onDone: () => setLine3Done(true),
   });
+  // suara ketikan: satu klik per huruf, mengikuti kecepatan mengetik
+  useTypeSound(tw1.display.length, active && !tw1.done, tw1.display.slice(-1));
+  useTypeSound(tw2.display.length, active && !tw2.done, tw2.display.slice(-1));
+  useTypeSound(tw3.display.length, active && !tw3.done, tw3.display.slice(-1));
   const buttonsVisible = buttonsReady && active;
 
   const playfulMessage = useMemo(() => {

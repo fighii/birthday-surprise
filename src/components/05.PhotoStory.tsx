@@ -7,7 +7,7 @@ import { PaperButton, PaperFrame } from "./PaperExtras";
 import AssetImage from "./AssetImage";
 import { assetUrl } from "../lib/assets";
 
-const SEGMENT_DURATION = 2000;
+const SEGMENT_DURATION = 3000;
 const PROGRESS_STEPS = 10; // progres bergerak per kotak (pixel), bukan mulus
 const FADE_MS = 700;
 const LOAD_SAFETY_MS = 1500; // jaga-jaga: kalau event load tidak datang, tetap tampilkan slide

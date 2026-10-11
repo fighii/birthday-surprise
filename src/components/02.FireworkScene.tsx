@@ -113,6 +113,9 @@ export default function FireworkScene() {
   const lastWishPosRef = useRef<{ x: number; y: number } | null>(null);
   const tapIdxRef = useRef(0);
   const paletteIdxRef = useRef(0);
+  // Teks label terakhir yang tampil. Saat label memudar (hintMode "off"), teksnya harus tetap
+  // teks lama; kalau tidak, "TAP LAYAR UNTUK MULAI" berganti jadi teks doa sesaat sebelum hilang.
+  const hintShownRef = useRef<"start" | "wish">("start");
 
   // ==========================================
   // Firework Config Normalizer (format lama & baru)
@@ -905,6 +908,8 @@ export default function FireworkScene() {
     if (stateRef.current < FWState.TRANSITION_OUT && !doneTriggeredRef.current) beginTransitionOut();
   };
 
+  if (hintMode !== "off") hintShownRef.current = hintMode;
+
   return (
     <section
       className={`scene-layer ${active ? "scene-active" : "scene-hidden"}`}
@@ -937,7 +942,7 @@ export default function FireworkScene() {
         aria-hidden
       >
         <span style={{ color: "#FF9A4A" }}>✦</span>{" "}
-        {hintMode === "start" ? "TAP LAYAR UNTUK MULAI" : "TAP-TAP LAYAR UNTUK DOA UNTUK AYANG"}{" "}
+        {hintShownRef.current === "start" ? "TAP LAYAR UNTUK MULAI" : "TAP-TAP LAYAR UNTUK DOA UNTUK AYANG"}{" "}
         <span style={{ color: "#FF9A4A" }}>✦</span>
       </div>
 

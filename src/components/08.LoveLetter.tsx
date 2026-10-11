@@ -9,6 +9,7 @@ import { CutoutText, PaperNote, PaperSticker, hash01 } from "./PaperCutout";
 import { PaperButton, PixelBurstLayer, PixelDivider, PixelHeart, usePrefersReducedMotion } from "./PaperExtras";
 import type { PixelBurstHandle } from "./PaperExtras";
 import SceneLabel from "./SceneLabel";
+import { useTypeSound } from "../hooks/useTypeSound";
 
 // Tulisan tangan di kertas bergaris: tinggi baris = 32px, jadi setiap paragraf
 // menempel rapi di garis (margin juga kelipatan 32px).
@@ -332,6 +333,10 @@ function LetterBody({
   const done = run && n >= total;
   let cur = 0;
   for (let i = 0; i < offsets.length; i++) if (offsets[i] <= n) cur = i;
+
+  // suara ketikan (hanya surat asli yang sedang diketik, bukan salinan lipatan)
+  const typedChar = paragraphs[cur]?.[n - offsets[cur] - 1];
+  useTypeSound(n, run && !done, typedChar);
 
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const contentRef = useRef<HTMLDivElement | null>(null);
