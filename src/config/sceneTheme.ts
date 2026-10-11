@@ -28,4 +28,4 @@ export const WISH_PALETTE: string[][] = [
 ];
 
 export const FONT_LED = 'Inter, system-ui, -apple-system, "Segoe UI", sans-serif';
-export const FONT_HAND = '"Segoe Script","Snell Roundhand","Brush Script MT",cursive';
+export const FONT_HAND = '"Caveat","Segoe Script",cursive';
